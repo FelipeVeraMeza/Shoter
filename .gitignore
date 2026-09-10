@@ -1,4 +1,4 @@
-# Unreal Engine generated/build folders
+# Carpetas generadas por Unreal Engine
 Binaries/
 Build/
 DerivedDataCache/
@@ -9,12 +9,16 @@ Saved/
 .vs/
 .vsconfig
 *.sln
+*.slnx
 *.suo
 *.opensdf
 *.sdf
 *.VC.db
 *.VC.opendb
 .idea/
+
+# Respaldos
+*.bak
 
 # macOS
 .DS_Store

@@ -1,10 +1,11 @@
-# 🎯 ShooterGame
+# 🎯 Shoter
 
-FPS arcade multijugador desarrollado en **Unreal Engine 5** (C++), para PC vía Steam.
+FPS arcade multijugador en **Unreal Engine 5.8** (C++), para PC vía Steam.
 
 > **Estado actual:** sistemas de combate multijugador implementados en C++ (red
-> autoritativa, compensación de latencia, armas por datos, reglas de partida y HUD).
-> Falta el contenido: mapas, personajes, armas y texturas.
+> autoritativa, compensación de latencia, armas por datos, reglas de partida y HUD),
+> sobre el contenido de la plantilla First Person: personajes, animaciones, armas y
+> mapas de prototipado.
 
 ---
 
@@ -26,9 +27,8 @@ Arquitectura → Planificación.
 
 ### Requisitos
 
-- **Unreal Engine 5.3+** (vía Epic Games Launcher)
-- **Windows:** Visual Studio 2022 con el workload *Game development with C++*
-- **Mac:** Xcode
+- **Unreal Engine 5.8**
+- **Visual Studio 2022** con el workload *Game development with C++*
 - **Git LFS** — obligatorio (ver abajo)
 
 ### Instalación
@@ -38,8 +38,8 @@ Arquitectura → Planificación.
 git lfs install
 
 # 2. Clonar
-git clone https://github.com/FelipeVeraMeza/Shootergame.git
-cd Shootergame
+git clone https://github.com/FelipeVeraMeza/Shoter.git
+cd Shoter
 ```
 
 > ⚠️ **Git LFS es obligatorio.** Los archivos `.uasset`, `.umap`, texturas y modelos
@@ -48,19 +48,27 @@ cd Shootergame
 
 ### Abrir y compilar
 
-1. Click derecho en `ShooterGame.uproject` → **Generate Visual Studio project files**
-2. Doble click en `ShooterGame.uproject` (la primera compilación tarda varios minutos)
+1. Click derecho en `Shoter.uproject` → **Generate Visual Studio project files**
+2. Doble click en `Shoter.uproject` (la primera compilación tarda varios minutos)
+
+Para compilar desde la línea de comandos sin abrir el editor:
+
+```powershell
+& "D:\Epic Games\UE_5.8\Engine\Build\BatchFiles\Build.bat" `
+    ShoterEditor Win64 Development -Project="<ruta>\Shoter.uproject" -WaitMutex
+```
 
 ### Configuración inicial (una sola vez, dentro del editor)
 
-El código no trae assets: hay que crear el arma como dato. Son unos minutos y es
-exactamente el flujo de trabajo previsto — el balance vive en assets, no en C++.
+El C++ no trae assets propios: define las clases, y el balance vive en DataAssets
+(RNF-9.3). Hay que crear el arma como dato y componer los Blueprints.
 
 **1. Crear el arma (dato de balance)**
 - `Content Browser → Add → Miscellaneous → Data Asset`
 - Elegir la clase **WeaponDataAsset**, nombrarlo `DA_RifleAsalto`
 - Abrirlo y ajustar los valores (los que trae por defecto ya son jugables:
   25 de daño, 600 RPM, cargador de 30)
+- En *Weapon Mesh* puedes asignar la malla de `Content/Weapons/Rifle`
 
 **2. Crear el actor del arma**
 - `Add → Blueprint Class →` buscar y elegir **WeaponBase**, nombrarlo `BP_RifleAsalto`
@@ -70,6 +78,11 @@ exactamente el flujo de trabajo previsto — el balance vive en assets, no en C+
 - `Add → Blueprint Class →` buscar y elegir **ShooterCharacter**, nombrarlo `BP_Jugador`
 - Seleccionar el componente **Inventory** → en *Default Weapons* agregar un elemento
   y asignar `BP_RifleAsalto`
+- En la categoría **Input** del Blueprint, asignar:
+  - *Default Mapping Contexts* → `Content/Input/IMC_Default`
+  - *Move Action* → `IA_Move` · *Look Action* → `IA_Look` · *Jump Action* → `IA_Jump`
+  - *Fire / Aim / Reload / Sprint / Crouch / Switch Weapon* → crear los `IA_` que falten
+    y mapearlos en un Input Mapping Context propio
 
 **4. Crear el modo de juego**
 - `Add → Blueprint Class →` buscar y elegir **ShooterGameMode**, nombrarlo `BP_ModoJuego`
@@ -77,7 +90,7 @@ exactamente el flujo de trabajo previsto — el balance vive en assets, no en C+
 - `Project Settings → Maps & Modes → Default GameMode` → `BP_ModoJuego`
 
 **5. Crear el nivel**
-- `File → New Level → Basic` (trae piso e iluminación)
+- `File → New Level → Basic`, o partir de `Content/LevelPrototyping`
 - Agregar dos o más **Player Start** separados entre sí
 - Opcional: agregar algún **Target Actor** como blanco de prueba
 - Guardar el nivel y presionar **Play**
@@ -103,19 +116,28 @@ funciona.
 | Agacharse | `Ctrl` |
 | Saltar | `Espacio` |
 
-Todo el esquema está también mapeado a mando.
+Las teclas concretas viven en los Input Mapping Contexts, no en C++: se reasignan
+sin recompilar (RF-11.2).
 
 ---
 
 ## 🗂️ ESTRUCTURA
 
 ```
-ShooterGame/
+Shoter/
 ├── Config/                     Configuración del proyecto (.ini)
+├── Content/                    Assets: personajes, armas, mapas, animaciones
+│   ├── Characters/             Maniquíes y animaciones
+│   ├── FirstPerson/            Plantilla base en Blueprints
+│   ├── Input/                  Input Actions y Mapping Contexts
+│   ├── LevelPrototyping/       Geometría y materiales de bloqueo
+│   ├── Variant_Shooter/        Shooter en Blueprints (referencia, intacto)
+│   └── Weapons/                Mallas de pistola, rifle y lanzagranadas
 ├── Source/
-│   ├── ShooterGame.Target.cs         Build de cliente
-│   ├── ShooterGameServer.Target.cs   Build de servidor dedicado
-│   └── ShooterGame/
+│   ├── Shoter.Target.cs              Build de cliente
+│   ├── ShoterEditor.Target.cs        Build de editor
+│   ├── ShoterServer.Target.cs        Build de servidor dedicado
+│   └── Shoter/
 │       ├── Core/               GameMode, GameState, PlayerState
 │       ├── Player/             Personaje y controlador
 │       ├── Weapons/            Armas, datos de balance e inventario
@@ -125,6 +147,10 @@ ShooterGame/
 └── .gitattributes              Configuración de Git LFS
 ```
 
+El contenido de `Variant_Shooter` es el shooter en Blueprints de la plantilla. Se
+conserva intacto como referencia y como fuente de assets; la lógica de juego real
+vive en `Source/Shoter` (RNF-9.2).
+
 ---
 
 ## 🛣️ HOJA DE RUTA
@@ -133,6 +159,7 @@ ShooterGame/
 |------|:------:|
 | Documentación y diseño | ✅ |
 | Sistemas de combate multijugador en C++ | ✅ |
+| Port a UE 5.8 con Enhanced Input | ✅ |
 | F0 · Preproducción y pipeline | 🔄 |
 | F1 · Rebanada vertical (contenido y validación) | 🔄 |
 | F2 · Producción de contenido | ⬜ |
