@@ -300,11 +300,24 @@ def build_level(mode_bp, target_class):
         log("blancos colocados: {}".format(count))
 
     # GameMode del nivel, para que no dependa de la configuración global.
-    world_settings = unreal.EditorLevelLibrary.get_editor_world().get_world_settings()
-    if world_settings and mode_bp:
+    # EditorLevelLibrary está deprecado; el subsistema es la ruta actual, con
+    # respaldo por si la versión del motor todavía no lo expone.
+    if mode_bp:
         generated = mode_bp.get_editor_property("generated_class")
-        if generated:
-            world_settings.set_editor_property("default_game_mode", generated)
+        world = None
+        try:
+            world = unreal.get_editor_subsystem(
+                unreal.UnrealEditorSubsystem
+            ).get_editor_world()
+        except Exception:
+            try:
+                world = unreal.EditorLevelLibrary.get_editor_world()
+            except Exception as error:
+                log("no se pudo obtener el mundo: {}".format(error))
+
+        settings = world.get_world_settings() if world else None
+        if settings and generated:
+            settings.set_editor_property("default_game_mode", generated)
             log("GameMode del nivel -> BP_ModoJuego")
 
     LEVEL_SUB.save_current_level()
@@ -332,4 +345,15 @@ def run():
     log("Para probar en red: Net Mode = Play As Client, 2 jugadores.")
 
 
-run()
+try:
+    run()
+except Exception as error:
+    # Un fallo a media construcción deja el proyecto en un estado confuso:
+    # mejor decir qué falló que morir con un traceback suelto.
+    import traceback
+
+    unreal.log_error("[entrenamiento] FALLÓ: {}".format(error))
+    unreal.log_error(traceback.format_exc())
+    unreal.log_error(
+        "[entrenamiento] Copia este error y pásalo para diagnosticarlo."
+    )
