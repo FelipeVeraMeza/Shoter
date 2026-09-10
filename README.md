@@ -17,6 +17,7 @@ FPS arcade multijugador en **Unreal Engine 5.8** (C++), para PC vía Steam.
 | [**REQUERIMIENTOS.md**](docs/REQUERIMIENTOS.md) | Requerimientos funcionales y no funcionales (RF/RNF) priorizados |
 | [**ARQUITECTURA.md**](docs/ARQUITECTURA.md) | Modelo de red, clases, decisiones técnicas irreversibles |
 | [**PLANIFICACION.md**](docs/PLANIFICACION.md) | Fases, sprints, hitos, riesgos, presupuesto y marketing |
+| [**ZONA_ENTRENAMIENTO.md**](docs/ZONA_ENTRENAMIENTO.md) | Nivel de pruebas: cómo generarlo y qué validar en él |
 
 **Si es tu primera vez en el proyecto, lee en este orden:** GDD → Requerimientos →
 Arquitectura → Planificación.
@@ -61,7 +62,22 @@ Para compilar desde la línea de comandos sin abrir el editor:
 ### Configuración inicial (una sola vez, dentro del editor)
 
 El C++ no trae assets propios: define las clases, y el balance vive en DataAssets
-(RNF-9.3). Hay que crear el arma como dato y componer los Blueprints.
+(RNF-9.3). Hay dos caminos para crearlos.
+
+#### Camino rápido: generar la zona de entrenamiento
+
+Un script crea todos los assets, los conecta y monta un nivel jugable con galería
+de tiro. En el editor, cambia **Cmd** por **Python** en la barra inferior y pega:
+
+```python
+exec(open(r"<ruta del proyecto>/Content/Python/build_training_zone.py").read())
+```
+
+Detalle completo en [ZONA_ENTRENAMIENTO.md](docs/ZONA_ENTRENAMIENTO.md).
+
+#### Camino manual
+
+Si prefieres entender dónde vive cada cosa, los pasos son estos.
 
 **1. Crear el arma (dato de balance)**
 - `Content Browser → Add → Miscellaneous → Data Asset`

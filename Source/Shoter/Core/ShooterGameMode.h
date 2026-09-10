@@ -15,7 +15,14 @@ class SHOTER_API AShooterGameMode : public AGameModeBase
 public:
 	AShooterGameMode();
 
-	/** Duración de la partida en segundos. */
+	/**
+	 * Partida sin final: ignora MatchDuration y ScoreToWin. Pensado para la zona
+	 * de entrenamiento, donde un cronómetro cortaría la práctica a mitad.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Reglas")
+	bool bEndlessMatch = false;
+
+	/** Duración de la partida en segundos. Sin efecto si bEndlessMatch. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Reglas", meta = (ClampMin = "10.0"))
 	float MatchDuration = 480.f;
 

@@ -33,6 +33,14 @@ void AShooterGameMode::StartMatch()
 	}
 
 	ShooterGameState->SetMatchPhase(EMatchPhase::InProgress);
+
+	// En modo entrenamiento la partida no termina: sin cronómetro ni marcador final.
+	if (bEndlessMatch)
+	{
+		ShooterGameState->SetMatchEndWorldTime(0.f);
+		return;
+	}
+
 	ShooterGameState->SetMatchEndWorldTime(GetWorld()->GetTimeSeconds() + MatchDuration);
 
 	GetWorldTimerManager().SetTimer(MatchTimerHandle, this, &AShooterGameMode::FinishMatch, MatchDuration, false);
@@ -130,7 +138,7 @@ void AShooterGameMode::OnPlayerKilled(AShooterPlayerController* Victim, AControl
 
 void AShooterGameMode::CheckWinCondition()
 {
-	if (ScoreToWin <= 0)
+	if (bEndlessMatch || ScoreToWin <= 0)
 	{
 		return;
 	}

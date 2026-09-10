@@ -151,11 +151,18 @@ void AShooterHUD::DrawMatchInfo()
 	}
 
 	const float TimeRemaining = ShooterGameState->GetTimeRemaining();
-	const int32 Minutes = FMath::FloorToInt(TimeRemaining / 60.f);
-	const int32 Seconds = FMath::FloorToInt(TimeRemaining) % 60;
+	const bool bMatchInProgress = ShooterGameState->GetMatchPhase() == EMatchPhase::InProgress;
 
-	const FString TimeText = FString::Printf(TEXT("%02d:%02d"), Minutes, Seconds);
-	DrawText(TimeText, FLinearColor::White, Canvas->ClipX * 0.5f - 30.f, 24.f, GEngine->GetMediumFont(), 1.6f);
+	// Una partida en curso sin tiempo restante es entrenamiento: mostrar 00:00
+	// haría pensar que ya terminó.
+	const FString TimeText = (bMatchInProgress && TimeRemaining <= 0.f)
+		? FString(TEXT("ENTRENAMIENTO"))
+		: FString::Printf(TEXT("%02d:%02d"),
+			FMath::FloorToInt(TimeRemaining / 60.f),
+			FMath::FloorToInt(TimeRemaining) % 60);
+
+	const float TimeOffset = (bMatchInProgress && TimeRemaining <= 0.f) ? 90.f : 30.f;
+	DrawText(TimeText, FLinearColor::White, Canvas->ClipX * 0.5f - TimeOffset, 24.f, GEngine->GetMediumFont(), 1.6f);
 
 	const FString ScoreText = FString::Printf(TEXT("%d  -  %d"),
 		ShooterGameState->GetTeamScore(EShooterTeam::Alpha),
