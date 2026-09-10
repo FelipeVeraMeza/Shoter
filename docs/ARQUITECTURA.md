@@ -74,20 +74,23 @@ implementa en la Fase 1, nunca después.
 // Cliente → Servidor: petición de disparo. Con validación.
 UFUNCTION(Server, Reliable, WithValidation)
 void Server_Fire(const FVector_NetQuantize& TraceStart,
-                 const FVector_NetQuantizeNormal& TraceDirection,
-                 float ClientFireTime);
+                 const FVector_NetQuantizeNormal& ShotDirection);
 
 // Servidor → Todos: efectos cosméticos (no afectan reglas).
 UFUNCTION(NetMulticast, Unreliable)
 void Multicast_PlayFireEffects();
 
 // Replicación de estado
-UPROPERTY(ReplicatedUsing = OnRep_CurrentAmmo)
+UPROPERTY(Replicated)
 int32 CurrentAmmo;
 ```
 
 **Criterio:** lo que afecta las reglas viaja `Reliable`. Lo cosmético viaja
 `Unreliable` (si se pierde un fogonazo, no pasa nada; si se pierde una muerte, sí).
+
+**El cliente no envía su marca de tiempo.** Sería lo natural, pero un cliente
+modificado podría falsearla para rebobinar a los demás donde le convenga. El
+servidor deduce el instante a rebobinar desde la latencia que él mismo mide.
 
 ---
 
@@ -242,20 +245,34 @@ Cliente → Steam (rama beta)   Servidor → imagen de contenedor
 
 ---
 
-## 8️⃣ ESTADO ACTUAL vs. ARQUITECTURA OBJETIVO
+## 8️⃣ ESTADO DE IMPLEMENTACIÓN
 
-Lo que existe hoy en el repositorio es un **prototipo single-player**, útil solo
-como punto de partida:
+| Sistema | Estado | Clase |
+|---------|:------:|-------|
+| Personaje replicado (mover, apuntar, correr, agacharse) | ✅ | `AShooterCharacter` |
+| Salud autoritativa con regeneración | ✅ | `UHealthComponent` |
+| Compensación de latencia | ✅ | `ULagCompensationComponent` |
+| Arma con disparo autoritativo, dispersión y retroceso | ✅ | `AWeaponBase` |
+| Balance por datos, sin recompilar | ✅ | `UWeaponDataAsset` |
+| Inventario de armas replicado | ✅ | `UInventoryComponent` |
+| Reglas, equipos, puntaje y reaparición segura | ✅ | `AShooterGameMode` |
+| HUD (mira dinámica, salud, munición, marcador) | ✅ | `AShooterHUD` |
+| Build de servidor dedicado | ✅ | `ShooterGameServer.Target.cs` |
+| Matchmaking y sesiones (EOS) | ⬜ | Fase 2 |
+| Bots de relleno | ⬜ | Fase 2 |
+| Interfaz en UMG/CommonUI | ⬜ | Fase 2 |
+| Anti-trampas (EAC) | ⬜ | Fase 3 |
 
-| Componente | Hoy | Objetivo | Acción |
-|------------|-----|----------|--------|
-| `AShooterCharacter` | Movimiento + disparo local | Replicado con predicción | Reescribir con red |
-| Disparo | Trazado local directo | RPC + compensación de latencia | Reescribir |
-| `ATargetActor` | Cubo que se destruye | Reemplazado por jugadores reales | Conservar para pruebas |
-| `AShooterGameMode` | Solo define el pawn | Reglas completas de partida | Ampliar |
-| Salud | Inexistente | `UHealthComponent` autoritativo | Crear |
-| Datos de armas | Valores en C++ | DataAssets | Migrar |
+### Deuda técnica conocida
 
-**Importante:** el prototipo actual sirve para validar la *sensación* del disparo
-(pilar 1 del GDD). Esa validación es real y valiosa. Pero el código de red se
-construye desde cero en la Fase 1 — no se "parcha" el prototipo.
+Registrada a propósito, para no descubrirla tarde:
+
+1. **Cajas de impacto por hueso.** La compensación de latencia rebobina la cápsula
+   del personaje, no huesos individuales; el headshot se aproxima por altura del
+   impacto. Al llegar el personaje con esqueleto, sustituir por `UBoxComponent`
+   por hueso. La estructura ya está preparada para el cambio.
+2. **Predicción de correr y apuntar.** Se predice en el cliente y se confirma por
+   RPC, lo que deja una corrección residual mínima. La solución correcta es un
+   `UCharacterMovementComponent` propio con `FSavedMove`.
+3. **Anclaje del arma.** Sin malla de personaje, el arma se ancla a la cámara. El
+   código ya busca primero un socket `WeaponSocket` y lo usará en cuanto exista.

@@ -2,8 +2,9 @@
 
 FPS arcade multijugador desarrollado en **Unreal Engine 5** (C++), para PC vía Steam.
 
-> **Estado actual:** prototipo single-player jugable + documentación de proyecto completa.
-> El desarrollo del multijugador comienza en la Fase 1 (ver planificación).
+> **Estado actual:** sistemas de combate multijugador implementados en C++ (red
+> autoritativa, compensación de latencia, armas por datos, reglas de partida y HUD).
+> Falta el contenido: mapas, personajes, armas y texturas.
 
 ---
 
@@ -49,9 +50,44 @@ cd Shootergame
 
 1. Click derecho en `ShooterGame.uproject` → **Generate Visual Studio project files**
 2. Doble click en `ShooterGame.uproject` (la primera compilación tarda varios minutos)
-3. En el editor: `File → New Level → Empty Level`
-4. Agregar un **Player Start** y uno o más **Target Actor** desde el panel *Place Actors*
-5. Guardar el nivel y presionar **Play**
+
+### Configuración inicial (una sola vez, dentro del editor)
+
+El código no trae assets: hay que crear el arma como dato. Son unos minutos y es
+exactamente el flujo de trabajo previsto — el balance vive en assets, no en C++.
+
+**1. Crear el arma (dato de balance)**
+- `Content Browser → Add → Miscellaneous → Data Asset`
+- Elegir la clase **WeaponDataAsset**, nombrarlo `DA_RifleAsalto`
+- Abrirlo y ajustar los valores (los que trae por defecto ya son jugables:
+  25 de daño, 600 RPM, cargador de 30)
+
+**2. Crear el actor del arma**
+- `Add → Blueprint Class →` buscar y elegir **WeaponBase**, nombrarlo `BP_RifleAsalto`
+- Abrirlo y en *Weapon Data* asignar `DA_RifleAsalto`
+
+**3. Crear el personaje**
+- `Add → Blueprint Class →` buscar y elegir **ShooterCharacter**, nombrarlo `BP_Jugador`
+- Seleccionar el componente **Inventory** → en *Default Weapons* agregar un elemento
+  y asignar `BP_RifleAsalto`
+
+**4. Crear el modo de juego**
+- `Add → Blueprint Class →` buscar y elegir **ShooterGameMode**, nombrarlo `BP_ModoJuego`
+- En *Default Pawn Class* asignar `BP_Jugador`
+- `Project Settings → Maps & Modes → Default GameMode` → `BP_ModoJuego`
+
+**5. Crear el nivel**
+- `File → New Level → Basic` (trae piso e iluminación)
+- Agregar dos o más **Player Start** separados entre sí
+- Opcional: agregar algún **Target Actor** como blanco de prueba
+- Guardar el nivel y presionar **Play**
+
+### Probar el multijugador
+
+En el editor: `Play → Net Mode → Play As Client`, y subir *Number of Players* a 2 o
+más. Para validar de verdad hay que probar con **150 ms de latencia simulada**
+(consola: `Net PktLag=150`), que es donde se nota si la compensación de latencia
+funciona.
 
 ### Controles
 
@@ -60,7 +96,14 @@ cd Shootergame
 | Moverse | `W A S D` |
 | Mirar | Mouse |
 | Disparar | Click izquierdo |
+| Apuntar | Click derecho |
+| Recargar | `R` |
+| Cambiar arma | `Q` / rueda del mouse |
+| Correr | `Shift` |
+| Agacharse | `Ctrl` |
 | Saltar | `Espacio` |
+
+Todo el esquema está también mapeado a mando.
 
 ---
 
@@ -68,13 +111,18 @@ cd Shootergame
 
 ```
 ShooterGame/
-├── Config/                  Configuración del proyecto (.ini)
-├── Source/ShooterGame/      Código C++
-│   ├── ShooterCharacter.*   Personaje en primera persona
-│   ├── TargetActor.*        Blanco destructible
-│   └── ShooterGameMode.*    Reglas de partida
-├── docs/                    Documentación del proyecto
-└── .gitattributes           Configuración de Git LFS
+├── Config/                     Configuración del proyecto (.ini)
+├── Source/
+│   ├── ShooterGame.Target.cs         Build de cliente
+│   ├── ShooterGameServer.Target.cs   Build de servidor dedicado
+│   └── ShooterGame/
+│       ├── Core/               GameMode, GameState, PlayerState
+│       ├── Player/             Personaje y controlador
+│       ├── Weapons/            Armas, datos de balance e inventario
+│       ├── Combat/             Salud, compensación de latencia, blancos
+│       └── UI/                 HUD
+├── docs/                       Documentación del proyecto
+└── .gitattributes              Configuración de Git LFS
 ```
 
 ---
@@ -84,9 +132,9 @@ ShooterGame/
 | Fase | Estado |
 |------|:------:|
 | Documentación y diseño | ✅ |
-| Prototipo de disparo (single-player) | ✅ |
-| F0 · Preproducción y pipeline | ⬜ |
-| F1 · Rebanada vertical multijugador | ⬜ |
+| Sistemas de combate multijugador en C++ | ✅ |
+| F0 · Preproducción y pipeline | 🔄 |
+| F1 · Rebanada vertical (contenido y validación) | 🔄 |
 | F2 · Producción de contenido | ⬜ |
 | F3 · Beta | ⬜ |
 | F4 · Lanzamiento en Steam | ⬜ |
