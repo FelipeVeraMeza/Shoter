@@ -4,6 +4,8 @@
 #include "Player/ShooterCharacter.h"
 #include "Player/ShooterPlayerController.h"
 #include "Combat/LagCompensationComponent.h"
+#include "Progression/ShooterProgressionSubsystem.h"
+#include "Engine/GameInstance.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/PlayerState.h"
@@ -38,7 +40,7 @@ void AWeaponBase::BeginPlay()
 
 		if (HasAuthority())
 		{
-			CurrentAmmo = WeaponData->MagazineSize;
+			CurrentAmmo = GetEffectiveMagazineSize();
 			ReserveAmmo = WeaponData->MaxReserveAmmo;
 		}
 	}
@@ -51,6 +53,7 @@ void AWeaponBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 	DOREPLIFETIME(AWeaponBase, CurrentAmmo);
 	DOREPLIFETIME(AWeaponBase, ReserveAmmo);
 	DOREPLIFETIME(AWeaponBase, bIsReloading);
+	DOREPLIFETIME(AWeaponBase, Attachments);
 }
 
 void AWeaponBase::SetOwningCharacter(AShooterCharacter* InCharacter)
@@ -69,7 +72,7 @@ void AWeaponBase::ResetAmmo()
 	// Cancela también una recarga en curso: el reinicio debe ser instantáneo.
 	GetWorldTimerManager().ClearTimer(ReloadTimerHandle);
 
-	CurrentAmmo = WeaponData->MagazineSize;
+	CurrentAmmo = GetEffectiveMagazineSize();
 	ReserveAmmo = WeaponData->MaxReserveAmmo;
 	bIsReloading = false;
 	ConsecutiveShots = 0;
@@ -179,7 +182,72 @@ float AWeaponBase::GetCurrentSpreadDegrees() const
 	const bool bAiming = OwningCharacter && OwningCharacter->IsAiming();
 	const float BaseSpread = bAiming ? WeaponData->SpreadADS : WeaponData->SpreadHip;
 
-	return FMath::Min(BaseSpread + AccumulatedSpread, WeaponData->SpreadMax);
+	// El accesorio escala también el tope, o una mira precisa quedaría anulada
+	// por el límite del arma en cuanto se disparara en ráfaga.
+	const float Multiplier = Attachments.GetSpreadMultiplier();
+	const float Capped = FMath::Min(BaseSpread + AccumulatedSpread, WeaponData->SpreadMax);
+
+	return Capped * Multiplier;
+}
+
+int32 AWeaponBase::GetEffectiveMagazineSize() const
+{
+	if (!WeaponData)
+	{
+		return 0;
+	}
+
+	// Al menos una bala: un multiplicador agresivo no puede dejar el arma
+	// inservible por redondeo.
+	return FMath::Max(1,
+		FMath::RoundToInt(WeaponData->MagazineSize * Attachments.GetMagazineMultiplier()));
+}
+
+float AWeaponBase::GetEffectiveReloadTime() const
+{
+	return WeaponData
+		? WeaponData->ReloadTime * Attachments.GetReloadTimeMultiplier()
+		: 0.f;
+}
+
+float AWeaponBase::GetEffectiveADSTime() const
+{
+	return WeaponData
+		? WeaponData->ADSTime * Attachments.GetADSTimeMultiplier()
+		: 0.f;
+}
+
+float AWeaponBase::GetEffectiveDamageAtDistance(float Distance) const
+{
+	if (!WeaponData)
+	{
+		return 0.f;
+	}
+
+	// El accesorio de cañón alarga el alcance efectivo, así que la caída se
+	// evalúa sobre la distancia corregida antes de escalar el daño.
+	const float RangeMultiplier = Attachments.GetEffectiveRangeMultiplier();
+	const float AdjustedDistance = (RangeMultiplier > 0.f) ? Distance / RangeMultiplier : Distance;
+
+	return WeaponData->GetDamageAtDistance(AdjustedDistance) * Attachments.GetDamageMultiplier();
+}
+
+void AWeaponBase::SetAttachments(const FWeaponAttachmentSet& NewAttachments)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	Attachments = NewAttachments;
+	OnRep_Attachments();
+}
+
+void AWeaponBase::OnRep_Attachments()
+{
+	// Un cargador ampliado se nota de inmediato; uno reducido no descarta
+	// balas ya cargadas, solo limita las futuras recargas.
+	CurrentAmmo = FMath::Min(CurrentAmmo, GetEffectiveMagazineSize());
 }
 
 FVector AWeaponBase::CalculateShotDirection(const FVector& AimDirection) const
@@ -231,6 +299,16 @@ void AWeaponBase::FireOnce()
 		{
 			ShooterPC->RegisterShotFired();
 		}
+
+		// Y para el desbloqueo de accesorios por uso del arma (RF-9.4).
+		if (const UGameInstance* GameInstance = GetGameInstance())
+		{
+			if (UShooterProgressionSubsystem* Progression =
+				GameInstance->GetSubsystem<UShooterProgressionSubsystem>())
+			{
+				Progression->RecordWeaponShot(WeaponData->GetFName());
+			}
+		}
 	}
 
 	Server_Fire(TraceStart, ShotDirection);
@@ -253,8 +331,11 @@ void AWeaponBase::ApplyRecoilToOwner()
 		? WeaponData->RecoilHorizontal->GetFloatValue(ShotIndex)
 		: FMath::FRandRange(-WeaponData->BaseRecoilHorizontal, WeaponData->BaseRecoilHorizontal);
 
-	OwningCharacter->AddControllerPitchInput(-Vertical);
-	OwningCharacter->AddControllerYawInput(Horizontal);
+	// La empuñadura reduce ambos ejes por igual (RF-5.10).
+	const float RecoilMultiplier = Attachments.GetRecoilMultiplier();
+
+	OwningCharacter->AddControllerPitchInput(-Vertical * RecoilMultiplier);
+	OwningCharacter->AddControllerYawInput(Horizontal * RecoilMultiplier);
 }
 
 void AWeaponBase::PlayLocalFireEffects()
@@ -363,7 +444,7 @@ void AWeaponBase::Server_Fire_Implementation(const FVector_NetQuantize& TraceSta
 
 	if (bHitCharacter && CharacterDistance <= GeometryDistance)
 	{
-		float FinalDamage = WeaponData->GetDamageAtDistance(CharacterDistance);
+		float FinalDamage = GetEffectiveDamageAtDistance(CharacterDistance);
 		if (bHeadshot)
 		{
 			FinalDamage *= WeaponData->HeadshotMultiplier;
@@ -408,7 +489,7 @@ void AWeaponBase::TryReload()
 		return;
 	}
 
-	if (CurrentAmmo >= WeaponData->MagazineSize || ReserveAmmo <= 0)
+	if (CurrentAmmo >= GetEffectiveMagazineSize() || ReserveAmmo <= 0)
 	{
 		return;
 	}
@@ -423,13 +504,13 @@ void AWeaponBase::TryReload()
 
 void AWeaponBase::Server_Reload_Implementation()
 {
-	if (!WeaponData || bIsReloading || CurrentAmmo >= WeaponData->MagazineSize || ReserveAmmo <= 0)
+	if (!WeaponData || bIsReloading || CurrentAmmo >= GetEffectiveMagazineSize() || ReserveAmmo <= 0)
 	{
 		return;
 	}
 
 	bIsReloading = true;
-	GetWorldTimerManager().SetTimer(ReloadTimerHandle, this, &AWeaponBase::FinishReload, WeaponData->ReloadTime, false);
+	GetWorldTimerManager().SetTimer(ReloadTimerHandle, this, &AWeaponBase::FinishReload, GetEffectiveReloadTime(), false);
 }
 
 void AWeaponBase::FinishReload()
@@ -439,7 +520,7 @@ void AWeaponBase::FinishReload()
 		return;
 	}
 
-	const int32 Needed = WeaponData->MagazineSize - CurrentAmmo;
+	const int32 Needed = GetEffectiveMagazineSize() - CurrentAmmo;
 	const int32 Taken = FMath::Min(Needed, ReserveAmmo);
 
 	CurrentAmmo += Taken;

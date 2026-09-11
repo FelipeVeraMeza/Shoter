@@ -82,6 +82,28 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Progresión")
 	void UnlockWeapon(FName WeaponId);
 
+	// --- Accesorios por uso (RF-9.4) ---
+
+	/**
+	 * Registra un disparo con un arma y desbloquea lo que corresponda.
+	 *
+	 * Se llama en cada disparo, así que no escribe en disco: el perfil se
+	 * guarda al terminar la partida. Guardar aquí costaría una escritura por
+	 * bala.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Progresión")
+	void RecordWeaponShot(FName WeaponId);
+
+	UFUNCTION(BlueprintPure, Category = "Progresión")
+	int32 GetWeaponShotCount(FName WeaponId) const;
+
+	UFUNCTION(BlueprintPure, Category = "Progresión")
+	bool IsAttachmentUnlocked(FName AttachmentId) const;
+
+	/** Marca un accesorio como disponible; lo usa el desbloqueo por uso. */
+	UFUNCTION(BlueprintCallable, Category = "Progresión")
+	void UnlockAttachment(FName AttachmentId);
+
 	UFUNCTION(BlueprintPure, Category = "Perfil")
 	FString GetPlayerName() const;
 
@@ -106,4 +128,7 @@ private:
 
 	/** Aplica los desbloqueos que correspondan al nivel actual. */
 	void RefreshUnlocks();
+
+	/** Desbloquea los accesorios cuyo umbral de disparos ya se alcanzó (RF-9.4). */
+	void RefreshAttachmentUnlocks(FName WeaponId, int32 ShotCount);
 };

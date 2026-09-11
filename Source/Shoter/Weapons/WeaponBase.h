@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "ShooterTypes.h"
+#include "Weapons/WeaponAttachmentDataAsset.h"
 #include "WeaponBase.generated.h"
 
 class UWeaponDataAsset;
@@ -23,6 +24,37 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Arma")
 	TObjectPtr<UWeaponDataAsset> WeaponData;
+
+	/**
+	 * Accesorios equipados (RF-5.10).
+	 *
+	 * Replicado porque el servidor aplica los modificadores al calcular daño y
+	 * dispersión: si solo viviera en el cliente, este podría anunciar cualquier
+	 * combinación (RNF-3.2).
+	 */
+	UPROPERTY(ReplicatedUsing = OnRep_Attachments, EditDefaultsOnly, BlueprintReadOnly, Category = "Arma")
+	FWeaponAttachmentSet Attachments;
+
+	/** Solo servidor. Cambia los accesorios y reajusta el cargador. */
+	void SetAttachments(const FWeaponAttachmentSet& NewAttachments);
+
+	// --- Valores del arma con los accesorios ya aplicados (RF-5.10) ---
+	//
+	// El resto del código pregunta por estos en vez de leer el DataAsset
+	// directamente, así añadir un modificador no obliga a tocar cada uso.
+
+	UFUNCTION(BlueprintPure, Category = "Arma")
+	int32 GetEffectiveMagazineSize() const;
+
+	UFUNCTION(BlueprintPure, Category = "Arma")
+	float GetEffectiveReloadTime() const;
+
+	UFUNCTION(BlueprintPure, Category = "Arma")
+	float GetEffectiveADSTime() const;
+
+	/** Daño a esa distancia, con la caída y los accesorios aplicados. */
+	UFUNCTION(BlueprintPure, Category = "Arma")
+	float GetEffectiveDamageAtDistance(float Distance) const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Arma")
 	TObjectPtr<USkeletalMeshComponent> WeaponMesh;
@@ -57,6 +89,10 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	/** Un cargador ampliado debe notarse sin esperar a la siguiente recarga. */
+	UFUNCTION()
+	void OnRep_Attachments();
 
 private:
 	UPROPERTY()

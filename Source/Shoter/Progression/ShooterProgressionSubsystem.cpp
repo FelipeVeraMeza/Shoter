@@ -1,5 +1,8 @@
 #include "Progression/ShooterProgressionSubsystem.h"
 #include "Progression/ShooterSaveGame.h"
+#include "Weapons/WeaponAttachmentDataAsset.h"
+#include "Engine/AssetManager.h"
+#include "AssetRegistry/AssetData.h"
 #include "Kismet/GameplayStatics.h"
 
 const FString UShooterProgressionSubsystem::SlotName = TEXT("ShooterProfile");
@@ -186,6 +189,84 @@ void UShooterProgressionSubsystem::UnlockWeapon(FName WeaponId)
 	if (SaveData && !SaveData->UnlockedWeapons.Contains(WeaponId))
 	{
 		SaveData->UnlockedWeapons.Add(WeaponId);
+	}
+}
+
+void UShooterProgressionSubsystem::RecordWeaponShot(FName WeaponId)
+{
+	if (!SaveData || WeaponId.IsNone())
+	{
+		return;
+	}
+
+	int32& Count = SaveData->WeaponShotCounts.FindOrAdd(WeaponId);
+	++Count;
+
+	// Recorrer el registro de assets en cada bala sería caro. Los umbrales de
+	// desbloqueo son múltiplos redondos, así que basta comprobar de vez en
+	// cuando: retrasa un desbloqueo unos disparos, nunca lo pierde.
+	constexpr int32 UnlockCheckInterval = 25;
+	if (Count % UnlockCheckInterval == 0)
+	{
+		RefreshAttachmentUnlocks(WeaponId, Count);
+	}
+}
+
+void UShooterProgressionSubsystem::RefreshAttachmentUnlocks(FName WeaponId, int32 ShotCount)
+{
+	// Los accesorios se buscan por el AssetManager en vez de una tabla fija:
+	// añadir uno nuevo es crear el asset, sin tocar código (RNF-9.3).
+	const UAssetManager* Manager = UAssetManager::GetIfInitialized();
+	if (!Manager)
+	{
+		return;
+	}
+
+	TArray<FAssetData> Assets;
+	Manager->GetAssetRegistry().GetAssetsByClass(
+		UWeaponAttachmentDataAsset::StaticClass()->GetClassPathName(), Assets);
+
+	for (const FAssetData& Asset : Assets)
+	{
+		const FName AssetName = Asset.AssetName;
+		if (SaveData->UnlockedAttachments.Contains(AssetName))
+		{
+			continue;
+		}
+
+		// Cargar solo los que aún faltan: los ya desbloqueados no se tocan.
+		const UWeaponAttachmentDataAsset* Attachment =
+			Cast<UWeaponAttachmentDataAsset>(Asset.GetAsset());
+
+		if (Attachment && Attachment->ShotsToUnlock > 0
+			&& ShotCount >= Attachment->ShotsToUnlock)
+		{
+			SaveData->UnlockedAttachments.Add(AssetName);
+		}
+	}
+}
+
+int32 UShooterProgressionSubsystem::GetWeaponShotCount(FName WeaponId) const
+{
+	if (!SaveData)
+	{
+		return 0;
+	}
+
+	const int32* Found = SaveData->WeaponShotCounts.Find(WeaponId);
+	return Found ? *Found : 0;
+}
+
+bool UShooterProgressionSubsystem::IsAttachmentUnlocked(FName AttachmentId) const
+{
+	return SaveData && SaveData->UnlockedAttachments.Contains(AttachmentId);
+}
+
+void UShooterProgressionSubsystem::UnlockAttachment(FName AttachmentId)
+{
+	if (SaveData && !SaveData->UnlockedAttachments.Contains(AttachmentId))
+	{
+		SaveData->UnlockedAttachments.Add(AttachmentId);
 	}
 }
 

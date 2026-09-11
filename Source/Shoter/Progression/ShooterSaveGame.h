@@ -82,4 +82,19 @@ public:
 	 */
 	UPROPERTY(BlueprintReadWrite, Category = "Ajustes")
 	FString Language;
+
+	/**
+	 * Disparos efectuados con cada arma, indexados por su nombre de asset
+	 * (RF-9.4).
+	 *
+	 * El desbloqueo de accesorios se mide por arma y no globalmente, que es lo
+	 * que pide el requerimiento: los accesorios del rifle se ganan usando el
+	 * rifle.
+	 */
+	UPROPERTY(BlueprintReadWrite, Category = "Progresión")
+	TMap<FName, int32> WeaponShotCounts;
+
+	/** Accesorios ya desbloqueados, por nombre de asset. */
+	UPROPERTY(BlueprintReadWrite, Category = "Progresión")
+	TSet<FName> UnlockedAttachments;
 };

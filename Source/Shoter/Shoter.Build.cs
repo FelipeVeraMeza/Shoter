@@ -30,7 +30,11 @@ public class Shoter : ModuleRules
 			"Slate",
 			"SlateCore",
 			// Necesario para consultar las resoluciones del monitor (RNF-5.3).
-			"RHI"
+			"RHI",
+			// Buscar los DataAssets de accesorios sin cargarlos todos (RF-9.4).
+			// Engine ya lo arrastra, pero depender de eso de forma implícita
+			// rompería si esa dependencia transitiva cambiara.
+			"AssetRegistry"
 		});
 	}
 }
