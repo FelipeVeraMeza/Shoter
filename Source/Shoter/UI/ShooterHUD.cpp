@@ -6,6 +6,7 @@
 #include "Core/ControlZone.h"
 #include "Core/WaveManager.h"
 #include "Kismet/GameplayStatics.h"
+#include "EngineUtils.h"
 #include "Combat/HealthComponent.h"
 #include "Weapons/WeaponBase.h"
 #include "Weapons/WeaponDataAsset.h"
@@ -56,6 +57,7 @@ void AShooterHUD::DrawHUD()
 		DrawHealth(Character);
 		DrawAmmo(Character);
 		DrawDamageIndicator(Character, ShooterPC);
+		DrawMinimap(Character);
 	}
 
 	DrawKillFeed();
@@ -628,6 +630,121 @@ void AShooterHUD::DrawControlZones()
 		DrawText(Zone->ZoneLabel, TextPrimary, X + BoxSize * 0.5f - 6.f, Y + 14.f,
 			GEngine->GetMediumFont(), 1.3f);
 	}
+}
+
+void AShooterHUD::DrawMinimap(AShooterCharacter* Character)
+{
+	if (!bShowMinimap || !Character)
+	{
+		return;
+	}
+
+	const AShooterPlayerState* LocalState = Character->GetPlayerState<AShooterPlayerState>();
+	if (!LocalState)
+	{
+		return;
+	}
+
+	const float CenterX = Canvas->ClipX - MinimapScreenRadius - 42.f;
+	const float CenterY = MinimapScreenRadius + 42.f;
+	const float Diameter = MinimapScreenRadius * 2.f;
+
+	// Fondo del minimapa.
+	DrawRect(FLinearColor(0.02f, 0.03f, 0.05f, 0.55f),
+		CenterX - MinimapScreenRadius, CenterY - MinimapScreenRadius, Diameter, Diameter);
+
+	// Borde: dos líneas arriba y abajo, como el resto de paneles.
+	DrawRect(FLinearColor(1.f, 1.f, 1.f, 0.12f),
+		CenterX - MinimapScreenRadius, CenterY - MinimapScreenRadius, Diameter, 1.f);
+	DrawRect(FLinearColor(1.f, 1.f, 1.f, 0.12f),
+		CenterX - MinimapScreenRadius, CenterY + MinimapScreenRadius - 1.f, Diameter, 1.f);
+
+	const FVector LocalLocation = Character->GetActorLocation();
+	const float LocalYaw = Character->GetActorRotation().Yaw;
+	const float Scale = MinimapScreenRadius / MinimapWorldRadius;
+
+	// Proyecta una posición del mundo al minimapa, rotada para que el frente
+	// del jugador quede siempre arriba.
+	auto WorldToMinimap = [&](const FVector& WorldLocation, float& OutX, float& OutY) -> bool
+	{
+		const FVector Delta = WorldLocation - LocalLocation;
+
+		if (Delta.SizeSquared2D() > FMath::Square(MinimapWorldRadius))
+		{
+			return false;
+		}
+
+		const float Radians = FMath::DegreesToRadians(-LocalYaw);
+		const float RotatedX = Delta.X * FMath::Cos(Radians) - Delta.Y * FMath::Sin(Radians);
+		const float RotatedY = Delta.X * FMath::Sin(Radians) + Delta.Y * FMath::Cos(Radians);
+
+		// El eje X del mundo apunta al frente, que en pantalla es hacia arriba.
+		OutX = CenterX + RotatedY * Scale;
+		OutY = CenterY - RotatedX * Scale;
+		return true;
+	};
+
+	// Zonas de Dominación: objetivos, no jugadores, así que mostrarlas no
+	// filtra información de posición enemiga.
+	TArray<AActor*> Zones;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AControlZone::StaticClass(), Zones);
+
+	for (const AActor* ZoneActor : Zones)
+	{
+		const AControlZone* Zone = CastChecked<AControlZone>(ZoneActor);
+
+		float ZoneX, ZoneY;
+		if (!WorldToMinimap(Zone->GetActorLocation(), ZoneX, ZoneY))
+		{
+			continue;
+		}
+
+		FLinearColor ZoneColor;
+		switch (Zone->GetOwningTeam())
+		{
+		case EShooterTeam::Alpha: ZoneColor = FLinearColor(0.15f, 0.5f, 1.f, 0.8f); break;
+		case EShooterTeam::Bravo: ZoneColor = FLinearColor(1.f, 0.3f, 0.15f, 0.8f); break;
+		default: ZoneColor = FLinearColor(0.5f, 0.5f, 0.55f, 0.8f); break;
+		}
+
+		DrawRect(ZoneColor, ZoneX - 6.f, ZoneY - 6.f, 12.f, 12.f);
+		DrawText(Zone->ZoneLabel, TextPrimary, ZoneX - 3.f, ZoneY - 7.f,
+			GEngine->GetTinyFont(), 1.f);
+	}
+
+	// Solo aliados (RF-7.9). Dibujar enemigos sería un wallhack incorporado y
+	// contradiría RNF-3.6, que exige no darle al cliente su posición.
+	for (TActorIterator<AShooterCharacter> It(GetWorld()); It; ++It)
+	{
+		const AShooterCharacter* Other = *It;
+		if (Other == Character || Other->IsDead())
+		{
+			continue;
+		}
+
+		const AShooterPlayerState* OtherState = Other->GetPlayerState<AShooterPlayerState>();
+		if (!OtherState || OtherState->GetTeam() != LocalState->GetTeam())
+		{
+			continue;
+		}
+
+		// En todos contra todos nadie es aliado: sin equipo no hay puntos que
+		// mostrar, o el modo se volvería trivial.
+		if (LocalState->GetTeam() == EShooterTeam::None)
+		{
+			continue;
+		}
+
+		float AllyX, AllyY;
+		if (WorldToMinimap(Other->GetActorLocation(), AllyX, AllyY))
+		{
+			DrawRect(FLinearColor(0.3f, 0.85f, 0.4f, 0.95f), AllyX - 3.f, AllyY - 3.f, 6.f, 6.f);
+		}
+	}
+
+	// El jugador local, siempre en el centro y apuntando hacia arriba.
+	DrawRect(FLinearColor(1.f, 1.f, 1.f, 1.f), CenterX - 2.f, CenterY - 2.f, 4.f, 4.f);
+	DrawLine(CenterX, CenterY, CenterX, CenterY - 10.f, FLinearColor(1.f, 1.f, 1.f, 0.9f), 1.5f);
 }
 
 void AShooterHUD::DrawConnectionWarning(AShooterPlayerController* Controller)

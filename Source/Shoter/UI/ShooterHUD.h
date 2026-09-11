@@ -32,6 +32,16 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "HUD")
 	float KillFeedDuration = 6.f;
 
+	/** Radio del mundo que abarca el minimapa, en cm (RF-7.9). */
+	UPROPERTY(EditDefaultsOnly, Category = "HUD|Minimapa", meta = (ClampMin = "500.0"))
+	float MinimapWorldRadius = 4000.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "HUD|Minimapa", meta = (ClampMin = "60.0"))
+	float MinimapScreenRadius = 90.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "HUD|Minimapa")
+	bool bShowMinimap = true;
+
 private:
 	void DrawCrosshair(AShooterCharacter* Character);
 	void DrawHitMarker(AShooterPlayerController* Controller);
@@ -47,6 +57,10 @@ private:
 
 	/** Aviso de conexión perdida, en lenguaje claro (RNF-2.6, RNF-4.6). */
 	void DrawConnectionWarning(AShooterPlayerController* Controller);
+
+	/** Minimapa con aliados y zonas (RF-7.9). */
+	void DrawMinimap(AShooterCharacter* Character);
+
 	void DrawDamageIndicator(AShooterCharacter* Character, AShooterPlayerController* Controller);
 	void DrawRespawnCountdown(AShooterPlayerController* Controller);
 

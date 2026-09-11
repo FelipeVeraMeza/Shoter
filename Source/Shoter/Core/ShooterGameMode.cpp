@@ -317,6 +317,13 @@ void AShooterGameMode::OnPlayerKilled(AShooterPlayerController* Victim, AControl
 
 	Victim->Client_NotifyKilledBy(KillerName, WeaponName);
 
+	// Enfocar al asesino durante la espera (RF-6.7). Se envía el pawn y no el
+	// controlador porque el cliente solo recibe actores relevantes para él.
+	if (Killer && Killer != Victim)
+	{
+		Victim->Client_StartKillCam(Killer->GetPawn());
+	}
+
 	const float RespawnWorldTime = GetWorld()->GetTimeSeconds() + RespawnDelay;
 	Victim->SetRespawnTime(RespawnWorldTime);
 

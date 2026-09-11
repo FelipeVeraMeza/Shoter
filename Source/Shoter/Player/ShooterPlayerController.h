@@ -79,11 +79,44 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Red", meta = (ClampMin = "1.0", ClampMax = "9.0"))
 	float DisconnectWarningSeconds = 3.f;
 
+	// --- Killcam (RF-6.7) ---
+
+	/**
+	 * Enfoca al asesino mientras dura la espera de reaparición.
+	 *
+	 * No es una repetición grabada: reproducir el momento de la muerte exigiría
+	 * un sistema de grabación (Replay) y guardar el estado de todos los actores.
+	 * Seguir al asesino en vivo responde la misma pregunta del jugador —quién y
+	 * desde dónde— con una fracción del coste.
+	 */
+	UFUNCTION(Client, Reliable)
+	void Client_StartKillCam(AActor* KillerActor);
+
+	UFUNCTION(BlueprintPure, Category = "HUD")
+	bool IsKillCamActive() const { return bKillCamActive; }
+
+	/** Distancia de la cámara al asesino durante la killcam. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Killcam", meta = (ClampMin = "100.0"))
+	float KillCamDistance = 350.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Killcam")
+	bool bKillCamEnabled = true;
+
 	virtual void Tick(float DeltaSeconds) override;
 
 private:
 	/** Momento del mundo en que se recibió la última señal del servidor. */
 	float LastServerResponseTime = 0.f;
+
+	UPROPERTY()
+	TObjectPtr<AActor> KillCamTarget;
+
+	bool bKillCamActive = false;
+
+	/** Recoloca la cámara detrás del asesino. */
+	void UpdateKillCam(float DeltaSeconds);
+
+	void StopKillCam();
 
 	float LastHitConfirmedTime = -1000.f;
 	bool bLastHitWasHeadshot = false;
