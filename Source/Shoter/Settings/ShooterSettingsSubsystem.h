@@ -142,6 +142,25 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Ajustes|Idioma")
 	TArray<FString> GetAvailableLanguages() const;
 
+	// --- Reasignación de controles (RF-11.2) ---
+
+	/**
+	 * Reasigna la tecla de una acción y lo persiste.
+	 *
+	 * Se apoya en UEnhancedInputUserSettings, que ya guarda los perfiles de
+	 * mapeo del jugador: reimplementar la persistencia aquí duplicaría lo que
+	 * el motor hace, y se desincronizaría con la UI de reasignación estándar.
+	 *
+	 * MappingName es el nombre de la acción tal como aparece en el contexto
+	 * (por ejemplo "IA_Fire").
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Ajustes|Controles")
+	bool RemapKey(APlayerController* PlayerController, FName MappingName, const FKey& NewKey);
+
+	/** Devuelve todas las reasignaciones a su valor de fábrica. */
+	UFUNCTION(BlueprintCallable, Category = "Ajustes|Controles")
+	void ResetKeyBindings(APlayerController* PlayerController);
+
 	/** Escribe ajustes de vídeo y perfil (RF-11.9). */
 	UFUNCTION(BlueprintCallable, Category = "Ajustes")
 	void ApplyAndSave();

@@ -8,6 +8,10 @@
 #include "Kismet/GameplayStatics.h"
 #include "Internationalization/Internationalization.h"
 #include "Internationalization/Culture.h"
+#include "EnhancedInputSubsystems.h"
+#include "UserSettings/EnhancedInputUserSettings.h"
+#include "GameFramework/PlayerController.h"
+#include "Engine/LocalPlayer.h"
 
 void UShooterSettingsSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -99,6 +103,81 @@ void UShooterSettingsSubsystem::SetLanguage(const FString& CultureCode)
 		Save->Language = CultureCode;
 		SaveProfile();
 	}
+}
+
+bool UShooterSettingsSubsystem::RemapKey(APlayerController* PlayerController,
+	FName MappingName, const FKey& NewKey)
+{
+	if (!PlayerController || MappingName.IsNone() || !NewKey.IsValid())
+	{
+		return false;
+	}
+
+	const ULocalPlayer* LocalPlayer = PlayerController->GetLocalPlayer();
+	UEnhancedInputLocalPlayerSubsystem* InputSubsystem = LocalPlayer
+		? LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>()
+		: nullptr;
+
+	UEnhancedInputUserSettings* UserSettings = InputSubsystem
+		? InputSubsystem->GetUserSettings() : nullptr;
+
+	if (!UserSettings)
+	{
+		return false;
+	}
+
+	FMapPlayerKeyArgs Args;
+	Args.MappingName = MappingName;
+	Args.NewKey = NewKey;
+
+	// Sin slot explícito la reasignación sustituye la primera tecla de la
+	// acción, que es lo que espera quien pulsa "cambiar" en el menú.
+	Args.Slot = EPlayerMappableKeySlot::First;
+	Args.bCreateMatchingSlotIfNeeded = true;
+
+	FGameplayTagContainer FailureReason;
+	UserSettings->MapPlayerKey(Args, FailureReason);
+
+	if (!FailureReason.IsEmpty())
+	{
+		return false;
+	}
+
+	// ApplySettings surte efecto en la sesión; SaveSettings lo persiste
+	// (RF-11.9). Sin la segunda llamada el cambio se pierde al cerrar.
+	UserSettings->ApplySettings();
+	UserSettings->SaveSettings();
+
+	return true;
+}
+
+void UShooterSettingsSubsystem::ResetKeyBindings(APlayerController* PlayerController)
+{
+	if (!PlayerController)
+	{
+		return;
+	}
+
+	const ULocalPlayer* LocalPlayer = PlayerController->GetLocalPlayer();
+	UEnhancedInputLocalPlayerSubsystem* InputSubsystem = LocalPlayer
+		? LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>()
+		: nullptr;
+
+	UEnhancedInputUserSettings* UserSettings = InputSubsystem
+		? InputSubsystem->GetUserSettings() : nullptr;
+
+	if (!UserSettings)
+	{
+		return;
+	}
+
+	if (UEnhancedPlayerMappableKeyProfile* Profile = UserSettings->GetCurrentKeyProfile())
+	{
+		Profile->ResetToDefault();
+	}
+
+	UserSettings->ApplySettings();
+	UserSettings->SaveSettings();
 }
 
 TArray<FString> UShooterSettingsSubsystem::GetAvailableLanguages() const
