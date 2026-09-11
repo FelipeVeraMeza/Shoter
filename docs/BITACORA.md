@@ -168,6 +168,7 @@ exista.
 | `build_sci_fi_range.py` | Hangar futurista con paneles luminosos |
 | `build_menu.py` | Crea los seis widgets del menú y `Lvl_Menu` |
 | `fix_movimiento.py` | Corrige el tipo de `IA_Move` y los modificadores de WASD |
+| `fix_gamepad.py` | Mapea el mando en `IMC_Combate` (RNF-4.5) |
 | `fix_blueprints.py` | Reasigna valores a los Blueprints **y los recompila** |
 | `fix_camara.py` | Mapea ratón y teclado en `IMC_Combate` |
 | `fix_arma.py` | Asigna malla y nombre a `DA_Rifle` |
@@ -206,10 +207,98 @@ movimiento propio: menos código y replicación gratuita por el
 
 ---
 
+## Fase 5 — Cerrar lo accesible por código
+
+Objetivo: agotar todo lo implementable sin depender de Steam, backend ni
+servidor dedicado. De 54 a 62 requerimientos funcionales.
+
+### El bug que la documentación no registraba
+
+El proyecto **no compilaba en un árbol limpio**. `TrainingDrone.cpp` y
+`TargetActor.cpp` declaraban ambos `HitFlashDuration` en un namespace anónimo,
+con valores distintos. El *unity build* de Unreal fusiona varios `.cpp` en una
+unidad de traducción, donde los dos nombres colisionan.
+
+Pasó desapercibido por una razón sutil: **el build adaptativo excluye del unity
+file los archivos que `git status` marca como modificados**. Mientras se editaba
+`TrainingDrone.cpp`, quedaba fuera y compilaba; al hacer commit, entraba y
+rompía.
+
+Se detectó al compilar tras un commit limpio. Sin eso, habría aparecido al
+clonar el repositorio en otra máquina — el mismo patrón que el módulo duplicado
+de la Fase 1.
+
+**Lección:** verificar con `-DisableAdaptiveUnity` antes de dar por bueno un
+cambio. Es la configuración con que compilaría una máquina nueva o un CI.
+
+### Qué se añadió
+
+| Sistema | Clase | Requerimientos |
+|---|---|---|
+| Dominación | `AControlZone` | RF-8.3 |
+| Oleadas | `AWaveManager` | RF-8.4 |
+| Accesorios | `UWeaponAttachmentDataAsset` | RF-5.10, RF-9.4 |
+| Límite de RPCs | `FRPCRateLimiter` | RNF-3.5 |
+| Detección de caída | `IsConnectionLost` | RNF-2.6 |
+| Minimapa | `DrawMinimap` | RF-7.9 |
+| Killcam | `Client_StartKillCam` | RF-6.7 |
+| Localización | LOCTEXT + `SetLanguage` | RNF-6.1, 6.2, 6.3 |
+| Reasignar teclas | `RemapKey` | RF-11.2 |
+
+### Decisiones
+
+**Las zonas de Dominación congelan el progreso cuando hay dos equipos dentro,
+en vez de revertirlo.** Si retrocediera, dos jugadores enfrentados se anularían
+sin que ninguno avanzara jamás.
+
+**La dificultad de Oleadas crece de forma lineal, no exponencial.** Con
+multiplicador, la oleada 10 sería injugable y la 3 trivial.
+
+**Los accesorios son multiplicadores, no valores absolutos.** Un mismo
+accesorio sirve para todas las armas sin recalibrarlo, y el balance sigue en
+el DataAsset del arma (RNF-9.3). Las ranuras se combinan multiplicando: así
+ninguna combinación puede anular una estadística por acumulación.
+
+**El minimapa nunca muestra enemigos.** Sería un wallhack incorporado y
+contradiría RNF-3.6, que exige no darle al cliente la posición de quien no ve.
+
+**La killcam sigue al asesino en vivo en vez de reproducir una grabación.** Una
+repetición real exigiría el sistema de Replay y guardar el estado de todos los
+actores; seguir al asesino responde la misma pregunta por una fracción del
+coste.
+
+**La RPC que excede el límite se descarta en silencio.** Responder con un error
+le diría al atacante dónde está el umbral.
+
+**La reasignación se apoya en `UEnhancedInputUserSettings`** en vez de mantener
+un mapa propio: el motor ya persiste los perfiles, y duplicarlo se
+desincronizaría con la UI estándar.
+
+### Localización: lo que no basta
+
+Migrar a `LOCTEXT` no es envolver cadenas. Los textos con variables se
+construían con `FString::Printf`, que **impide traducir**: concatenar en código
+fija el orden de las palabras y la concordancia de plural, y ningún idioma
+tiene por qué respetarlos. Se pasaron a `FText::Format` con argumentos
+nombrados, que el traductor puede reordenar, y el recuento de bajas usa la
+forma plural del motor en vez de añadir una "s".
+
+### Un aviso de deprecación que habría roto el proyecto
+
+`GetCurrentKeyProfile` está obsoleto en 5.8 y el compilador lo advierte:
+*"your project will no longer compile"* en la próxima versión. Solo apareció al
+compilar con `-DisableAdaptiveUnity`. Sustituido por `GetActiveKeyProfile`.
+
+---
+
 ## Estado al cierre
 
-**54 de 100 requerimientos funcionales, 40 de 58 Must.** Detalle en
+**62 de 100 requerimientos funcionales, 41 de 58 Must.** Detalle en
 [TRAZABILIDAD.md](TRAZABILIDAD.md).
+
+No queda programación de cliente pendiente sin dependencias externas. Lo que
+falta es trabajo de editor, contenido (7 armas y 3 mapas) y las tres
+dependencias de siempre.
 
 ### Lo que queda bloqueado
 
@@ -225,12 +314,18 @@ escribiendo código del cliente:
 
 ### Lo que queda por hacer, sin dependencias
 
+Ya no es programación:
+
 - **Widgets del menú**: la navegación está completa en C++; falta colocar los
   botones en UMG, que es trabajo de editor
-- **Sound Classes**: los volúmenes se guardan pero no enrutan a nada
-- **Localización (RNF-6)**: los textos del HUD están en código, no en tablas
-- **Modos Dominación y Oleadas** (RF-8.3, RF-8.4)
-- **Accesorios de arma** (RF-5.10, RF-9.4)
+- **Sound Classes**: los volúmenes se guardan pero no enrutan a nada hasta que
+  existan los assets de audio
+- **Colocar los actores nuevos**: Dominación necesita tres `AControlZone` en un
+  mapa; Oleadas, un `AWaveManager` con sus `PlayerStart`
+- **Crear los `DA_*` de accesorios**: el sistema lee lo que encuentre en el
+  registro de assets
+- **Contenido**: 7 armas y 3 mapas de los que pide el checklist
+- **Ejecutar `fix_gamepad.py` y `fix_movimiento.py`** en el editor
 
 ### Bug abierto: movimiento WASD
 

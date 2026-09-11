@@ -18,19 +18,35 @@ contra el código del proyecto.
 
 | Prioridad | Total | ✅ | 🔶 | ❌ / 🔒 |
 |---|---:|---:|---:|---:|
-| 🔴 Must | 58 | 40 | 3 | 15 |
-| 🟡 Should | 30 | 13 | 1 | 16 |
-| 🟢 Could | 12 | 1 | 0 | 11 |
-| **RF total** | **100** | **54** | **4** | **42** |
-| **RNF total** | **52** | **13** | **6** | **33** |
+| 🔴 Must | 58 | 41 | 2 | 15 |
+| 🟡 Should | 30 | 17 | 1 | 12 |
+| 🟢 Could | 12 | 4 | 0 | 8 |
+| **RF total** | **100** | **62** | **3** | **35** |
+| **RNF total** | **52** | **17** | **6** | **29** |
 
 El núcleo de combate está completo. Lo que falta se concentra en: cuenta y
-sesión, menús, matchmaking, progresión, configuración y herramientas de
-administración.
+sesión, matchmaking y herramientas de administración — casi todo bloqueado
+por las tres dependencias externas.
 
-> Actualizado tras los commits `5df6c9b` y `120facc`, que añadieron bots,
-> granadas, deslizamiento y la zona de entrenamiento con drones. Las cinco
-> filas que cambiaron son RF-1.5, RF-3.6, RF-4.6, RF-5.11 y RF-8.4.
+> **Lo accesible por código está hecho.** De los 35 RF pendientes, ~22 están
+> bloqueados por Steam, backend o servidor dedicado; el resto es trabajo de
+> editor (widgets UMG) o de contenido (7 armas y 3 mapas que faltan).
+
+### Qué cambió en la última sesión
+
+| Requerimiento | Antes | Ahora |
+|---|:--:|:--:|
+| RF-5.10 Accesorios | ❌ | ✅ `WeaponAttachmentDataAsset` |
+| RF-6.7 Killcam | ❌ | ✅ Cámara sobre el asesino |
+| RF-7.9 Minimapa | ❌ | ✅ Aliados y zonas, nunca enemigos |
+| RF-8.3 Dominación | ❌ | ✅ `AControlZone` |
+| RF-8.4 Oleadas | ❌ | ✅ `AWaveManager` |
+| RF-9.4 Accesorios por uso | ❌ | ✅ Conteo de disparos por arma |
+| RF-11.2 Reasignar teclas | ❌ | ✅ `RemapKey` |
+| RNF-2.6 Detectar desconexión | ❌ | ✅ Aviso a los 3 s |
+| RNF-3.5 Límite de RPCs | ❌ | ✅ `FRPCRateLimiter` |
+| RNF-4.5 Mando | ❌ | 🔶 Script listo, falta ejecutarlo |
+| RNF-6 Localización | ❌ | ✅ LOCTEXT + selector de idioma |
 
 ---
 
@@ -93,7 +109,7 @@ administración.
 | RF-5.7 Dispersión | 🔴 | ✅ | `GetCurrentSpreadDegrees` |
 | RF-5.8 Caída de daño | 🔴 | ✅ | `WeaponDataAsset::GetDamageAtDistance` |
 | RF-5.9 Headshot | 🔴 | ✅ | `LagCompensationComponent` con `HeadshotHeightFraction` |
-| RF-5.10 Accesorios | 🟡 | ❌ | No implementado |
+| RF-5.10 Accesorios | 🟡 | ✅ | `WeaponAttachmentDataAsset`: mira, cañón y cargador con modificadores multiplicativos |
 | RF-5.11 Granadas | 🟢 | ✅ | `AShooterGrenade`: daño radial, mecha de 3 s, validado en servidor |
 
 ## 6. Salud, muerte y reaparición ✅
@@ -106,7 +122,7 @@ administración.
 | RF-6.4 Reaparición | 🔴 | ✅ | `ShooterGameMode::RespawnPlayer` |
 | RF-6.5 Aparición segura | 🔴 | ✅ | `ChoosePlayerStart_Implementation` elige el más lejano |
 | RF-6.6 Ver quién te mató | 🟡 | ✅ | `Client_NotifyKilledBy`, visible al reaparecer |
-| RF-6.7 Killcam | 🟢 | ❌ | No implementado |
+| RF-6.7 Killcam | 🟢 | ✅ | `Client_StartKillCam` enfoca al asesino durante la espera |
 
 ## 7. HUD en partida
 
@@ -120,7 +136,7 @@ administración.
 | RF-7.6 Indicador de daño | 🔴 | ✅ | `DrawDamageIndicator` |
 | RF-7.7 Killfeed | 🟡 | ✅ | `DrawKillFeed`, replicado por el GameState |
 | RF-7.8 Tabla de posiciones | 🟡 | ✅ | `DrawLiveScoreboard`, con Tab |
-| RF-7.9 Minimapa | 🟢 | ❌ | No implementado |
+| RF-7.9 Minimapa | 🟢 | ✅ | `DrawMinimap`: aliados y zonas; nunca enemigos (RNF-3.6) |
 
 ## 8. Modos de juego
 
@@ -128,8 +144,8 @@ administración.
 |---|:--:|:--:|---|
 | RF-8.1 Todos contra todos | 🔴 | ✅ | `bTeamBased = false`; el ganador sale de la tabla |
 | RF-8.2 Equipos 4v4 | 🔴 | ✅ | `bTeamBased` con reparto automático |
-| RF-8.3 Dominación | 🟡 | ❌ | No implementado |
-| RF-8.4 Oleadas | 🟢 | 🔶 | La IA ya existe (`ShooterBotController`); falta la lógica de oleadas |
+| RF-8.3 Dominación | 🟡 | ✅ | `AControlZone` con captura, disputa y puntos por segundo |
+| RF-8.4 Oleadas | 🟢 | ✅ | `AWaveManager` con dificultad lineal y tope de concurrentes |
 | RF-8.5 Fin de partida | 🔴 | ✅ | `FinishMatch` por tiempo o `CheckWinCondition` |
 | RF-8.6 Pantalla de resultados | 🔴 | ✅ | `DrawScoreboard` con posiciones, bajas y muertes |
 
@@ -143,7 +159,7 @@ servidor (RNF-3.4) queda pendiente del backend.
 | RF-9.1 Ganar XP | 🔴 | ✅ | `AddExperience`, otorgada al terminar la partida |
 | RF-9.2 Subir de nivel | 🔴 | ✅ | Curva del 15 % acumulativo por nivel |
 | RF-9.3 Desbloquear armas | 🔴 | ✅ | Tabla de desbloqueos por nivel en `RefreshUnlocks` |
-| RF-9.4 Desbloquear accesorios | 🟡 | ❌ | Sin sistema de accesorios |
+| RF-9.4 Desbloquear accesorios | 🟡 | ✅ | `RecordWeaponShot` cuenta disparos por arma |
 | RF-9.5 Persistencia | 🔴 | ✅ | `UShooterSaveGame` en disco (local; RNF-3.4 pendiente) |
 | RF-9.6 Estadísticas | 🟡 | ✅ | K/D, precisión y partidas acumuladas en el perfil |
 | RF-9.7 Desafíos diarios | 🟢 | ❌ |
@@ -156,7 +172,7 @@ de servicios externos, solo de UI y `UGameUserSettings`.
 | Bloque | Total | Estado |
 |---|---:|---|
 | RF-10 Arsenal | 3 | ❌ Requiere UI de loadouts |
-| RF-11 Configuración | 9 | ✅ 8 de 9 en `ShooterSettingsSubsystem`: sensibilidad, calidad, volúmenes, VSync, límite de FPS, modo ventana, daltonismo, color de mira. Persisten entre sesiones. Falta la UI que los exponga |
+| RF-11 Configuración | 9 | ✅ 9 de 9 en `ShooterSettingsSubsystem`: sensibilidad, reasignación de teclas, calidad, volúmenes, VSync, límite de FPS, modo ventana, daltonismo, color de mira. Persisten entre sesiones. Falta la UI que los exponga |
 | RF-12 Social | 6 | 🔒 Requiere Steam |
 
 ## 13–16. Administrador / LiveOps
@@ -196,7 +212,7 @@ migrar es cambiar el destino, no el contenido.
 | RNF-2.3 Ancho de banda ≤128 kbps | 🔶 | Sin medir |
 | RNF-2.4 Compensación de latencia | ✅ | `LagCompensationComponent` con rebobinado de historial |
 | RNF-2.5 Búsqueda ≤60 s | 🔒 | Sin matchmaking |
-| RNF-2.6 Detectar desconexión | ❌ | No implementado |
+| RNF-2.6 Detectar desconexión | ✅ | `IsConnectionLost`: avisa a los 3 s, con mensaje en lenguaje claro |
 | RNF-2.7 Sin teletransportes al 5 % de pérdida | 🔶 | Sin medir |
 
 ### Seguridad (RNF-3)
@@ -207,7 +223,7 @@ migrar es cambiar el destino, no el contenido.
 | RNF-3.2 El cliente no decide impactos | ✅ | `Server_Fire` recalcula el trazado |
 | RNF-3.3 Easy Anti-Cheat | ❌ | Fase 3 |
 | RNF-3.4 Progreso en servidor | 🔒 | Sin backend |
-| RNF-3.5 Límite de RPCs | ❌ | No implementado |
+| RNF-3.5 Límite de RPCs | ✅ | `FRPCRateLimiter` en disparo, granada y estados |
 | RNF-3.6 Relevancia de red | 🔶 | Por defecto del motor; sin ajustar |
 | RNF-3.7 Sin datos personales | ✅ | El proyecto no recoge ninguno |
 
@@ -219,7 +235,7 @@ migrar es cambiar el destino, no el contenido.
 | RNF-4.2 Controles estándar | ✅ | WASD, ratón, R, Shift, Ctrl |
 | RNF-4.3 HUD no solo por color | ✅ | Salud con número, munición con cifras |
 | RNF-4.4 Legible a 1080p | ✅ | Paneles con fondo y contraste |
-| RNF-4.5 Jugable con mando | ❌ | Sin mapeos de gamepad |
+| RNF-4.5 Jugable con mando | 🔶 | `fix_gamepad.py` mapea el mando; pendiente de ejecutar en el editor |
 | RNF-4.6 Errores en lenguaje claro | 🔶 | Solo en scripts de Python |
 
 ### Compatibilidad, localización y resto
@@ -227,7 +243,7 @@ migrar es cambiar el destino, no el contenido.
 | Bloque | Estado |
 |---|---|
 | RNF-5 Compatibilidad | 🔶 Windows/DX12 por defecto del motor; sin probar el rango de resoluciones |
-| RNF-6 Localización | ❌ Textos del HUD en código, no en tablas (incumple RNF-6.1) |
+| RNF-6 Localización | ✅ Textos en LOCTEXT con argumentos nombrados y plurales; español/inglés con selector de idioma persistido |
 | RNF-7 Escalabilidad | 🔒 Sin infraestructura |
 | RNF-8 Disponibilidad | 🔒 Sin servicio |
 | RNF-9 Mantenibilidad | ✅ 4 de 6: nomenclatura, lógica en C++, balance en DataAssets, Git LFS |
@@ -254,17 +270,37 @@ infraestructura previstas en las fases F2–F4 de
 
 ## Siguiente bloque accesible
 
-Por orden de coste y dependencias:
+**No queda programación de cliente pendiente sin dependencias.** Lo que falta
+para una beta se divide en tres categorías, ninguna de las cuales se resuelve
+escribiendo C++:
 
-Los bloques accesibles por código están casi todos hechos. Lo que queda:
+### 1. Trabajo de editor
 
-1. **Widgets del menú** — la lógica está completa en `ShooterMenuSubsystem` y
-   `ShooterMenuWidget`; falta colocar botones en UMG, que es trabajo de diseño
-   en el editor
-2. **Sound Classes** — los volúmenes se guardan pero no enrutan a nada hasta
-   que existan los assets de audio
-3. **Localización (RNF-6)** — mover los textos del HUD a tablas. Es el mayor
-   bloque pendiente que sí es programación y no depende de nada externo
-4. **Modo Dominación (RF-8.3)** — zonas de captura sobre el GameMode existente
-5. **Modo Oleadas (RF-8.4)** — la IA ya está; falta la progresión de oleadas
-6. **Accesorios de arma (RF-5.10, RF-9.4)** — extiende `WeaponDataAsset`
+| Tarea | Por qué no es código |
+|---|---|
+| Widgets del menú (RF-2.1, 2.2) | Los seis `WBP_*` existen pero vacíos. Colocar botones y enlazarlos a `OpenScreen`/`StartMatch` es arrastrar elementos en UMG |
+| Ejecutar `fix_gamepad.py` (RNF-4.5) | El script está escrito; requiere el editor abierto |
+| Ejecutar `fix_movimiento.py` | Confirma el bug de WASD |
+| Colocar `AControlZone` en un mapa | Dominación necesita tres zonas situadas a mano |
+| Colocar `AWaveManager` en un mapa | Oleadas necesita el gestor y sus `PlayerStart` |
+| Crear los `DA_*` de accesorios | El sistema lee lo que haya; los assets se crean en el editor |
+
+### 2. Contenido
+
+- **7 armas** de las 8 que pide el checklist (solo existe `DA_Rifle`)
+- **3 mapas** de los 4 (existe `Lvl_Entrenamiento`)
+- **Assets de audio**: sin Sound Classes los volúmenes se guardan pero no
+  enrutan a nada
+
+### 3. Dependencias externas
+
+Las tres de siempre: Steamworks, backend y servidor dedicado. Ver la sección
+anterior.
+
+### Lo único de código que queda
+
+- **Sonido del hitmarker** (RF-7.5): depende de que exista el asset de audio
+- **Reequilibrio de equipos ante abandonos** (RF-3.7): la base está en
+  `ChooseTeamForNewPlayer`
+- **Medir el rendimiento** (RNF-1.1, 1.2, 1.4, 1.7): requiere hardware
+  objetivo, no código

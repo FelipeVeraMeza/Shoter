@@ -142,6 +142,136 @@ El servidor decide el daño; los clientes solo reproducen el efecto (RNF-3.1).
 
 ---
 
+## Modo Dominación — `AControlZone`
+
+**Cubre:** RF-8.3
+
+Cada zona se captura por presencia. Para montar el modo:
+
+1. Colocar tres `AControlZone` en el mapa, con `ZoneLabel` "A", "B" y "C"
+2. En el GameMode: `GameModeType = Domination`, `bTeamBased = true`
+3. `ScoreToWin` pasa a ser puntos de zona, no bajas
+
+| Propiedad | Qué hace |
+|---|---|
+| `CaptureTime` | Segundos que tarda **un** jugador en capturarla |
+| `ExtraOccupantBonus` | Cuánto acelera cada ocupante extra (0.5 = la mitad) |
+| `PointsPerSecond` | Puntos que otorga al equipo que la controla |
+| `ZoneRadius`, `ZoneHeight` | Tamaño del volumen de captura |
+
+### Reglas de captura
+
+- **Un solo equipo dentro**: el progreso avanza
+- **Ambos equipos**: se congela; revertirlo haría que dos jugadores
+  enfrentados se anularan sin avanzar nunca
+- **Vacía**: el progreso se mantiene, obligando a volver
+
+El HUD dibuja una caja por zona, que parpadea en ámbar si está disputada.
+
+---
+
+## Modo Oleadas — `AWaveManager`
+
+**Cubre:** RF-8.4
+
+Reutiliza `AShooterBotController`: el enemigo de oleadas y el bot de relleno se
+comportan igual.
+
+```cpp
+// En el nivel, con un AWaveManager colocado:
+WaveManager->StartWaves();
+```
+
+| Propiedad | Por defecto | Qué hace |
+|---|---:|---|
+| `BaseEnemyCount` | 4 | Enemigos de la primera oleada |
+| `EnemiesPerWave` | 2 | Cuántos añade cada oleada |
+| `MaxConcurrentEnemies` | 12 | Tope de vivos a la vez, por rendimiento |
+| `TimeBetweenWaves` | 8 s | Descanso para recargar |
+| `SpawnInterval` | 1.2 s | Separación entre apariciones |
+
+La oleada N trae `BaseEnemyCount + (N-1) * EnemiesPerWave` enemigos:
+crecimiento lineal, no exponencial. Requiere `PlayerStart` en el mapa; el
+gestor elige el más alejado del jugador más cercano.
+
+---
+
+## Accesorios de arma — `UWeaponAttachmentDataAsset`
+
+**Cubre:** RF-5.10, RF-9.4
+
+Tres ranuras: mira, cañón y cargador. Los efectos son **multiplicadores**, así
+que un mismo accesorio sirve para cualquier arma.
+
+```cpp
+FWeaponAttachmentSet Set;
+Set.Optic = MiraReflex;     // SpreadMultiplier = 0.8
+Set.Barrel = CanonLargo;    // EffectiveRangeMultiplier = 1.4
+
+Weapon->SetAttachments(Set);   // solo servidor
+```
+
+| Campo | 1.0 significa | Menor que 1 |
+|---|---|---|
+| `DamageMultiplier` | sin efecto | menos daño |
+| `SpreadMultiplier` | sin efecto | **más preciso** |
+| `RecoilMultiplier` | sin efecto | **menos retroceso** |
+| `MagazineMultiplier` | sin efecto | cargador menor |
+| `ReloadTimeMultiplier` | sin efecto | **recarga más rápida** |
+| `ADSTimeMultiplier` | sin efecto | **apunta más rápido** |
+| `EffectiveRangeMultiplier` | sin efecto | menos alcance |
+
+Las tres ranuras se combinan multiplicando, no sumando: dos accesorios que
+reducen la dispersión un 20 % dejan un 64 %.
+
+### Desbloqueo por uso
+
+`ShotsToUnlock` define cuántos disparos **con esa arma** hacen falta. El
+conteo vive en `WeaponShotCounts` del perfil, y se comprueba cada 25 disparos
+para no recorrer el registro de assets en cada bala.
+
+---
+
+## Límite de RPCs — `FRPCRateLimiter`
+
+**Cubre:** RNF-3.5
+
+```cpp
+// En el header del actor que recibe la RPC:
+FRPCRateLimiter FireRateLimiter{ 30, 1.f };   // 30 llamadas por segundo
+
+// Al principio de la implementación:
+if (!FireRateLimiter.AllowCall(GetWorld()->GetTimeSeconds()))
+{
+    return;   // descarte silencioso
+}
+```
+
+No es un `UObject`: se incrusta por valor, sin coste de replicación. El
+descarte es silencioso a propósito — responder le diría al atacante dónde está
+el umbral.
+
+---
+
+## Idioma — `SetLanguage`
+
+**Cubre:** RNF-6.2, RNF-6.3
+
+```cpp
+Settings->GetAvailableLanguages();   // ["es", "en"]
+Settings->SetLanguage(TEXT("en"));   // efecto inmediato, persistido
+```
+
+Un perfil nuevo hereda el idioma del sistema. Para regenerar el manifiesto tras
+añadir textos:
+
+```
+UnrealEditor-Cmd.exe Shoter.uproject -run=GatherText
+    -config="Config/Localization/Game.ini"
+```
+
+---
+
 ## Qué falta conectar
 
 | Pendiente | Por qué |

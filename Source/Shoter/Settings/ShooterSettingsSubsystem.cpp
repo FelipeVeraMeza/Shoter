@@ -171,7 +171,7 @@ void UShooterSettingsSubsystem::ResetKeyBindings(APlayerController* PlayerContro
 		return;
 	}
 
-	if (UEnhancedPlayerMappableKeyProfile* Profile = UserSettings->GetCurrentKeyProfile())
+	if (UEnhancedPlayerMappableKeyProfile* Profile = UserSettings->GetActiveKeyProfile())
 	{
 		Profile->ResetToDefault();
 	}
