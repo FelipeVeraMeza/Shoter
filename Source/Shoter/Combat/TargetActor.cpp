@@ -5,22 +5,28 @@
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 
+namespace
+{
+	/** Duración del destello blanco al recibir un impacto, en segundos. */
+	constexpr float HitFlashDuration = 0.12f;
+}
+
 ATargetActor::ATargetActor()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
 
 	MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MeshComponent"));
 	RootComponent = MeshComponent;
 
-	// Cubo del motor: el blanco se ve sin necesidad de arte propio.
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMeshAsset(TEXT("/Engine/BasicShapes/Cube.Cube"));
-	if (CubeMeshAsset.Succeeded())
+	// Esfera del motor: blanco circular sin necesidad de arte propio.
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMeshAsset(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	if (SphereMeshAsset.Succeeded())
 	{
-		MeshComponent->SetStaticMesh(CubeMeshAsset.Object);
+		MeshComponent->SetStaticMesh(SphereMeshAsset.Object);
 	}
 
-	MeshComponent->SetRelativeScale3D(FVector(0.6f, 0.6f, 1.8f));
+	MeshComponent->SetRelativeScale3D(FVector(0.7f));
 	MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	MeshComponent->SetCollisionResponseToAllChannels(ECR_Block);
 	MeshComponent->SetMobility(EComponentMobility::Movable);
@@ -29,6 +35,8 @@ ATargetActor::ATargetActor()
 void ATargetActor::BeginPlay()
 {
 	Super::BeginPlay();
+
+	HomeLocation = GetActorLocation();
 
 	if (HasAuthority())
 	{
@@ -50,6 +58,25 @@ void ATargetActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME(ATargetActor, Health);
 }
 
+void ATargetActor::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	if (HitFlashRemaining > 0.f)
+	{
+		HitFlashRemaining = FMath::Max(HitFlashRemaining - DeltaSeconds, 0.f);
+		UpdateVisuals();
+	}
+
+	// El vaivén lo calcula cada máquina con el tiempo del mundo: así queda
+	// sincronizado sin gastar ancho de banda replicando la posición.
+	if (SwingAmplitude > 0.f)
+	{
+		const float Phase = GetWorld()->GetTimeSeconds() * SwingSpeed + HomeLocation.X * 0.01f;
+		SetActorLocation(HomeLocation + FVector(0.f, FMath::Sin(Phase) * SwingAmplitude, 0.f));
+	}
+}
+
 float ATargetActor::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent,
 	AController* EventInstigator, AActor* DamageCauser)
 {
@@ -63,6 +90,7 @@ float ATargetActor::TakeDamage(float DamageAmount, FDamageEvent const& DamageEve
 
 	Health = FMath::Max(Health - ActualDamage, 0.f);
 	UpdateVisuals();
+	Multicast_PlayHitFeedback();
 
 	if (Health <= 0.f)
 	{
@@ -70,6 +98,12 @@ float ATargetActor::TakeDamage(float DamageAmount, FDamageEvent const& DamageEve
 	}
 
 	return ActualDamage;
+}
+
+void ATargetActor::Multicast_PlayHitFeedback_Implementation()
+{
+	HitFlashRemaining = HitFlashDuration;
+	UpdateVisuals();
 }
 
 void ATargetActor::HandleDestroyed()
@@ -116,7 +150,14 @@ void ATargetActor::UpdateVisuals()
 		return;
 	}
 
-	const FLinearColor Color = FMath::Lerp(DamagedColor, HealthyColor, GetHealthPercent());
+	FLinearColor Color = FMath::Lerp(DamagedColor, HealthyColor, GetHealthPercent());
+
+	// Destello blanco justo tras el impacto: confirma el acierto al instante.
+	if (HitFlashRemaining > 0.f)
+	{
+		const float Alpha = HitFlashRemaining / HitFlashDuration;
+		Color = FMath::Lerp(Color, FLinearColor::White, Alpha);
+	}
 
 	// El material del motor expone el color base con estos nombres según la versión.
 	DynamicMaterial->SetVectorParameterValue(TEXT("Color"), Color);

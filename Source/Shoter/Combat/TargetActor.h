@@ -8,11 +8,12 @@ class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
 
 /**
- * Blanco de entrenamiento. El servidor decide el daño y la destrucción; los
- * clientes solo reproducen el efecto visual (RNF-3.1).
+ * Blanco de entrenamiento esférico. El servidor decide el daño y la
+ * destrucción; los clientes solo reproducen el efecto visual (RNF-3.1).
  *
- * Al agotarse la salud desaparece y vuelve tras RespawnDelay, de modo que la
- * zona de tiro no se queda vacía. Con RespawnDelay <= 0 no reaparece.
+ * Da retroalimentación inmediata al impacto: destello, retroceso y tinte según
+ * la salud. Al agotarse desaparece y vuelve tras RespawnDelay, para que la
+ * galería de tiro no se quede vacía.
  */
 UCLASS()
 class SHOTER_API ATargetActor : public AActor
@@ -32,13 +33,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Blanco", meta = (ClampMin = "0.0"))
 	float RespawnDelay = 3.f;
 
-	/** Color con el blanco intacto. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Blanco")
-	FLinearColor HealthyColor = FLinearColor(0.05f, 0.55f, 0.9f);
+	/** Oscila de lado a lado. Cero lo deja quieto. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Blanco", meta = (ClampMin = "0.0"))
+	float SwingAmplitude = 0.f;
 
-	/** Color al que vira según baja la salud. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Blanco", meta = (ClampMin = "0.1"))
+	float SwingSpeed = 1.f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Blanco")
-	FLinearColor DamagedColor = FLinearColor(0.9f, 0.15f, 0.1f);
+	FLinearColor HealthyColor = FLinearColor(0.05f, 0.6f, 0.95f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Blanco")
+	FLinearColor DamagedColor = FLinearColor(0.95f, 0.15f, 0.1f);
 
 	UFUNCTION(BlueprintPure, Category = "Blanco")
 	float GetHealth() const { return Health; }
@@ -51,6 +57,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
@@ -60,16 +67,21 @@ private:
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> DynamicMaterial;
 
+	FVector HomeLocation = FVector::ZeroVector;
 	FTimerHandle RespawnTimerHandle;
+
+	/** Segundos restantes del destello blanco al recibir un impacto. */
+	float HitFlashRemaining = 0.f;
 
 	UFUNCTION()
 	void OnRep_Health();
 
-	/** Tiñe el blanco según la salud restante. */
 	void UpdateVisuals();
-
 	void HandleDestroyed();
 	void Respawn();
+
+	UFUNCTION(NetMulticast, Unreliable)
+	void Multicast_PlayHitFeedback();
 
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_SetVisible(bool bVisible);

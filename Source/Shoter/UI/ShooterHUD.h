@@ -37,6 +37,18 @@ private:
 	void DrawDamageIndicator(AShooterCharacter* Character, AShooterPlayerController* Controller);
 	void DrawRespawnCountdown(AShooterPlayerController* Controller);
 
+	/** Pantalla de resultados al terminar la partida (RF-8.6). */
+	void DrawScoreboard();
+
+	/** Tabla de posiciones durante la partida, con Tab (RF-7.8). */
+	void DrawLiveScoreboard();
+
+	/** Cabecera de columnas, compartida por ambas tablas. */
+	void DrawColumns(float X, float Y, float Width);
+
+	void DrawPlayerRows(const TArray<const class AShooterPlayerState*>& Players,
+		float X, float Y, float Width, float RowHeight);
+
 	/** Convierte un ángulo de dispersión en separación de la mira, en píxeles. */
 	float SpreadDegreesToPixels(float SpreadDegrees) const;
 };
