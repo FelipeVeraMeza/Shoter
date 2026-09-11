@@ -207,6 +207,13 @@ void AWeaponBase::FireOnce()
 	{
 		ApplyRecoilToOwner();
 		PlayLocalFireEffects();
+
+		// Cuenta el disparo para la precisión acumulada (RF-9.6).
+		if (AShooterPlayerController* ShooterPC =
+			Cast<AShooterPlayerController>(OwningCharacter->GetController()))
+		{
+			ShooterPC->RegisterShotFired();
+		}
 	}
 
 	Server_Fire(TraceStart, ShotDirection);

@@ -9,6 +9,7 @@ void AShooterGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(AShooterGameState, MatchEndWorldTime);
 	DOREPLIFETIME(AShooterGameState, ScoreAlpha);
 	DOREPLIFETIME(AShooterGameState, ScoreBravo);
+	DOREPLIFETIME(AShooterGameState, KillFeed);
 }
 
 float AShooterGameState::GetTimeRemaining() const
@@ -48,5 +49,29 @@ void AShooterGameState::AddTeamScore(EShooterTeam Team, int32 Amount)
 	case EShooterTeam::Alpha: ScoreAlpha += Amount; break;
 	case EShooterTeam::Bravo: ScoreBravo += Amount; break;
 	default: break;
+	}
+}
+
+void AShooterGameState::AddKillEvent(const FString& KillerName, const FString& VictimName,
+	const FString& WeaponName, bool bHeadshot)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	FShooterKillEvent Event;
+	Event.KillerName = KillerName;
+	Event.VictimName = VictimName;
+	Event.WeaponName = WeaponName;
+	Event.bHeadshot = bHeadshot;
+	Event.WorldTime = GetWorld()->GetTimeSeconds();
+
+	// La más reciente va primero: el HUD dibuja de arriba abajo.
+	KillFeed.Insert(Event, 0);
+
+	if (KillFeed.Num() > MaxKillFeedEntries)
+	{
+		KillFeed.SetNum(MaxKillFeedEntries);
 	}
 }

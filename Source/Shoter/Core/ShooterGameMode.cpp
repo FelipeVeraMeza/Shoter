@@ -4,6 +4,12 @@
 #include "Player/ShooterCharacter.h"
 #include "Player/ShooterPlayerController.h"
 #include "UI/ShooterHUD.h"
+#include "Weapons/WeaponBase.h"
+#include "Weapons/WeaponDataAsset.h"
+#include "Progression/ShooterProgressionSubsystem.h"
+#include "Telemetry/ShooterTelemetrySubsystem.h"
+#include "Engine/GameInstance.h"
+#include "Engine/Engine.h"
 #include "GameFramework/PlayerStart.h"
 #include "EngineUtils.h"
 #include "TimerManager.h"
@@ -34,6 +40,20 @@ void AShooterGameMode::StartMatch()
 
 	ShooterGameState->SetMatchPhase(EMatchPhase::InProgress);
 
+	// Telemetría de partida (RF-13.1).
+	if (const UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (UShooterTelemetrySubsystem* Telemetry =
+			GameInstance->GetSubsystem<UShooterTelemetrySubsystem>())
+		{
+			Telemetry->RecordMatchStart(
+				GetWorld()->GetMapName(),
+				bTeamBased ? TEXT("Equipos") : TEXT("TodosContraTodos"));
+		}
+	}
+
+	MatchStartWorldTime = GetWorld()->GetTimeSeconds();
+
 	// En modo entrenamiento la partida no termina: sin cronómetro ni marcador final.
 	if (bEndlessMatch)
 	{
@@ -54,6 +74,51 @@ void AShooterGameMode::FinishMatch()
 	}
 
 	GetWorldTimerManager().ClearTimer(MatchTimerHandle);
+
+	AwardEndOfMatchExperience();
+}
+
+void AShooterGameMode::AwardEndOfMatchExperience()
+{
+	// La progresión es local a cada cliente; en una partida en escucha solo el
+	// anfitrión tiene GameInstance con el subsistema. Cuando exista el backend
+	// (RNF-3.4), el servidor reportará el resultado de todos.
+	const UGameInstance* GameInstance = GetGameInstance();
+	if (!GameInstance)
+	{
+		return;
+	}
+
+	UShooterProgressionSubsystem* Progression =
+		GameInstance->GetSubsystem<UShooterProgressionSubsystem>();
+	if (!Progression)
+	{
+		return;
+	}
+
+	const APlayerController* LocalController = GEngine
+		? GEngine->GetFirstLocalPlayerController(GetWorld())
+		: nullptr;
+	if (!LocalController)
+	{
+		return;
+	}
+
+	const AShooterPlayerState* State = LocalController->GetPlayerState<AShooterPlayerState>();
+	if (!State)
+	{
+		return;
+	}
+
+	Progression->RecordMatchResult(State->GetKills(), State->GetDeaths(), 0);
+
+	if (UShooterTelemetrySubsystem* Telemetry =
+		GameInstance->GetSubsystem<UShooterTelemetrySubsystem>())
+	{
+		Telemetry->RecordMatchEnd(
+			GetWorld()->GetTimeSeconds() - MatchStartWorldTime,
+			State->GetKills(), State->GetDeaths());
+	}
 }
 
 void AShooterGameMode::PostLogin(APlayerController* NewPlayer)
@@ -106,10 +171,14 @@ void AShooterGameMode::OnPlayerKilled(AShooterPlayerController* Victim, AControl
 
 	AShooterGameState* ShooterGameState = GetGameState<AShooterGameState>();
 
-	if (AShooterPlayerState* VictimState = Victim->GetPlayerState<AShooterPlayerState>())
+	AShooterPlayerState* VictimState = Victim->GetPlayerState<AShooterPlayerState>();
+	if (VictimState)
 	{
 		VictimState->AddDeath();
 	}
+
+	FString KillerName = TEXT("El entorno");
+	FString WeaponName = TEXT("");
 
 	// Un jugador no suma por eliminarse a sí mismo.
 	if (Killer && Killer != Victim)
@@ -117,6 +186,18 @@ void AShooterGameMode::OnPlayerKilled(AShooterPlayerController* Victim, AControl
 		if (AShooterPlayerState* KillerState = Killer->GetPlayerState<AShooterPlayerState>())
 		{
 			KillerState->AddKill();
+			KillerName = KillerState->GetPlayerName();
+
+			if (const AShooterCharacter* KillerPawn = Cast<AShooterCharacter>(Killer->GetPawn()))
+			{
+				if (const AWeaponBase* Weapon = KillerPawn->GetCurrentWeapon())
+				{
+					if (const UWeaponDataAsset* Data = Weapon->WeaponData)
+					{
+						WeaponName = Data->DisplayName.ToString();
+					}
+				}
+			}
 
 			if (bTeamBased && ShooterGameState)
 			{
@@ -124,6 +205,21 @@ void AShooterGameMode::OnPlayerKilled(AShooterPlayerController* Victim, AControl
 			}
 		}
 	}
+	else if (Killer == Victim)
+	{
+		KillerName = TEXT("Suicidio");
+	}
+
+	// Registro visible para todos (RF-7.7) y aviso a la víctima (RF-6.6).
+	if (ShooterGameState)
+	{
+		const FString VictimName = VictimState
+			? VictimState->GetPlayerName() : FString(TEXT("Jugador"));
+
+		ShooterGameState->AddKillEvent(KillerName, VictimName, WeaponName, false);
+	}
+
+	Victim->Client_NotifyKilledBy(KillerName, WeaponName);
 
 	const float RespawnWorldTime = GetWorld()->GetTimeSeconds() + RespawnDelay;
 	Victim->SetRespawnTime(RespawnWorldTime);

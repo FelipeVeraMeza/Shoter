@@ -18,10 +18,10 @@ contra el código del proyecto.
 
 | Prioridad | Total | ✅ | 🔶 | ❌ / 🔒 |
 |---|---:|---:|---:|---:|
-| 🔴 Must | 58 | 28 | 2 | 28 |
-| 🟡 Should | 30 | 4 | 2 | 24 |
+| 🔴 Must | 58 | 38 | 1 | 19 |
+| 🟡 Should | 30 | 8 | 1 | 21 |
 | 🟢 Could | 12 | 0 | 0 | 12 |
-| **RF total** | **100** | **32** | **4** | **64** |
+| **RF total** | **100** | **46** | **2** | **52** |
 | **RNF total** | **52** | **13** | **6** | **33** |
 
 El núcleo de combate está completo. Lo que falta se concentra en: cuenta y
@@ -36,7 +36,7 @@ administración.
 |---|:--:|:--:|---|
 | RF-1.1 Login con Steam | 🔴 | 🔒 | Requiere Steamworks SDK y `OnlineSubsystemSteam` |
 | RF-1.2 Perfil persistente | 🔴 | 🔒 | Depende de RF-1.1 |
-| RF-1.3 Nombre visible | 🔴 | 🔶 | `APlayerState::PlayerName` existe; falta UI para editarlo |
+| RF-1.3 Nombre visible | 🔴 | ✅ | `ShooterProgressionSubsystem::SetPlayerName`, persistido |
 | RF-1.4 Recuperar progreso | 🔴 | 🔒 | Depende del backend de progresión |
 | RF-1.5 Jugar sin conexión | 🟡 | ❌ | Sin bots todavía |
 | RF-1.6 Aviso de fallo online | 🔴 | ❌ | Sin capa online que pueda fallar |
@@ -101,7 +101,7 @@ administración.
 | RF-6.3 Muerte a 0 | 🔴 | ✅ | `HandleTakeAnyDamage` |
 | RF-6.4 Reaparición | 🔴 | ✅ | `ShooterGameMode::RespawnPlayer` |
 | RF-6.5 Aparición segura | 🔴 | ✅ | `ChoosePlayerStart_Implementation` elige el más lejano |
-| RF-6.6 Ver quién te mató | 🟡 | 🔶 | El servidor lo conoce; falta mostrarlo en el HUD |
+| RF-6.6 Ver quién te mató | 🟡 | ✅ | `Client_NotifyKilledBy`, visible al reaparecer |
 | RF-6.7 Killcam | 🟢 | ❌ | No implementado |
 
 ## 7. HUD en partida
@@ -114,7 +114,7 @@ administración.
 | RF-7.4 Marcador y tiempo | 🔴 | ✅ | `DrawMatchInfo` |
 | RF-7.5 Hitmarker | 🔴 | 🔶 | Visual en `DrawHitMarker`; falta el sonido |
 | RF-7.6 Indicador de daño | 🔴 | ✅ | `DrawDamageIndicator` |
-| RF-7.7 Killfeed | 🟡 | ❌ | No implementado |
+| RF-7.7 Killfeed | 🟡 | ✅ | `DrawKillFeed`, replicado por el GameState |
 | RF-7.8 Tabla de posiciones | 🟡 | ✅ | `DrawLiveScoreboard`, con Tab |
 | RF-7.9 Minimapa | 🟢 | ❌ | No implementado |
 
@@ -131,17 +131,17 @@ administración.
 
 ## 9. Progresión
 
-Ningún requerimiento implementado. Requiere sistema de guardado
-(`USaveGame` local o backend según RNF-3.4).
+Implementada con guardado local en `UShooterSaveGame`. El almacenamiento en
+servidor (RNF-3.4) queda pendiente del backend.
 
-| ID | Pri | Estado |
-|---|:--:|:--:|
-| RF-9.1 Ganar XP | 🔴 | ❌ |
-| RF-9.2 Subir de nivel | 🔴 | ❌ |
-| RF-9.3 Desbloquear armas | 🔴 | ❌ |
-| RF-9.4 Desbloquear accesorios | 🟡 | ❌ |
-| RF-9.5 Persistencia | 🔴 | ❌ |
-| RF-9.6 Estadísticas | 🟡 | 🔶 | `ShooterPlayerState` lleva bajas y muertes de la partida |
+| ID | Pri | Estado | Dónde |
+|---|:--:|:--:|---|
+| RF-9.1 Ganar XP | 🔴 | ✅ | `AddExperience`, otorgada al terminar la partida |
+| RF-9.2 Subir de nivel | 🔴 | ✅ | Curva del 15 % acumulativo por nivel |
+| RF-9.3 Desbloquear armas | 🔴 | ✅ | Tabla de desbloqueos por nivel en `RefreshUnlocks` |
+| RF-9.4 Desbloquear accesorios | 🟡 | ❌ | Sin sistema de accesorios |
+| RF-9.5 Persistencia | 🔴 | ✅ | `UShooterSaveGame` en disco (local; RNF-3.4 pendiente) |
+| RF-9.6 Estadísticas | 🟡 | ✅ | K/D, precisión y partidas acumuladas en el perfil |
 | RF-9.7 Desafíos diarios | 🟢 | ❌ |
 
 ## 10–12. Arsenal, configuración y social
@@ -152,13 +152,20 @@ de servicios externos, solo de UI y `UGameUserSettings`.
 | Bloque | Total | Estado |
 |---|---:|---|
 | RF-10 Arsenal | 3 | ❌ Requiere UI de loadouts |
-| RF-11 Configuración | 9 | ❌ salvo RF-11.2 🔶: las teclas viven en Input Mapping Contexts, reasignables sin recompilar |
+| RF-11 Configuración | 9 | ✅ 8 de 9 en `ShooterSettingsSubsystem`: sensibilidad, calidad, volúmenes, VSync, límite de FPS, modo ventana, daltonismo, color de mira. Persisten entre sesiones. Falta la UI que los exponga |
 | RF-12 Social | 6 | 🔒 Requiere Steam |
 
 ## 13–16. Administrador / LiveOps
 
-Ningún requerimiento implementado. Todos requieren backend, telemetría y panel
-de administración — infraestructura fuera del cliente del juego.
+| ID | Pri | Estado | Dónde |
+|---|:--:|:--:|---|
+| RF-13.1 Registrar eventos | 🔴 | ✅ | `ShooterTelemetrySubsystem`, JSON Lines en `Saved/Telemetry` |
+| RF-13.4 Registrar errores | 🟡 | ✅ | `RecordError` |
+| RF-13.2, 13.3, 13.5 | 🔴🟡 | 🔒 | Requieren backend que consuma los eventos |
+| RF-14 a RF-16 | — | 🔒 | Requieren backend y panel de administración |
+
+Los eventos ya se emiten en el formato que consumiría un servicio de análisis:
+migrar es cambiar el destino, no el contenido.
 
 ---
 

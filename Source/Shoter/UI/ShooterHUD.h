@@ -28,6 +28,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "HUD")
 	float DamageIndicatorDuration = 1.2f;
 
+	/** Segundos que una línea del registro permanece visible. */
+	UPROPERTY(EditDefaultsOnly, Category = "HUD")
+	float KillFeedDuration = 6.f;
+
 private:
 	void DrawCrosshair(AShooterCharacter* Character);
 	void DrawHitMarker(AShooterPlayerController* Controller);
@@ -42,6 +46,9 @@ private:
 
 	/** Tabla de posiciones durante la partida, con Tab (RF-7.8). */
 	void DrawLiveScoreboard();
+
+	/** Registro de eliminaciones, arriba a la derecha (RF-7.7). */
+	void DrawKillFeed();
 
 	/** Cabecera de columnas, compartida por ambas tablas. */
 	void DrawColumns(float X, float Y, float Width);

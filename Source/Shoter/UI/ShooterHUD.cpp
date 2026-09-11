@@ -6,6 +6,8 @@
 #include "Combat/HealthComponent.h"
 #include "Weapons/WeaponBase.h"
 #include "Weapons/WeaponDataAsset.h"
+#include "Settings/ShooterSettingsSubsystem.h"
+#include "Engine/GameInstance.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
@@ -48,6 +50,8 @@ void AShooterHUD::DrawHUD()
 		DrawAmmo(Character);
 		DrawDamageIndicator(Character, ShooterPC);
 	}
+
+	DrawKillFeed();
 
 	if (ShooterPC)
 	{
@@ -202,6 +206,70 @@ void AShooterHUD::DrawLiveScoreboard()
 	DrawPlayerRows(Players, X, Y + HeaderHeight, Width, RowHeight);
 }
 
+void AShooterHUD::DrawKillFeed()
+{
+	const AShooterGameState* ShooterGameState = GetWorld()->GetGameState<AShooterGameState>();
+	if (!ShooterGameState)
+	{
+		return;
+	}
+
+	const TArray<FShooterKillEvent>& Feed = ShooterGameState->GetKillFeed();
+	if (Feed.Num() == 0)
+	{
+		return;
+	}
+
+	const FString LocalName = (PlayerOwner && PlayerOwner->PlayerState)
+		? PlayerOwner->PlayerState->GetPlayerName() : FString();
+
+	const float Now = GetWorld()->GetTimeSeconds();
+	const float RowHeight = 22.f;
+	const float Right = Canvas->ClipX - 42.f;
+
+	int32 Visible = 0;
+	for (const FShooterKillEvent& Event : Feed)
+	{
+		const float Age = Now - Event.WorldTime;
+		if (Age > KillFeedDuration)
+		{
+			continue;
+		}
+
+		// Las últimas décimas se desvanecen en vez de desaparecer de golpe.
+		const float Alpha = FMath::Min((KillFeedDuration - Age) / 0.6f, 1.f);
+		const float RowY = 96.f + Visible * RowHeight;
+
+		// Las líneas que involucran al jugador local se destacan.
+		const bool bInvolved = !LocalName.IsEmpty()
+			&& (Event.KillerName == LocalName || Event.VictimName == LocalName);
+
+		FString Line = Event.WeaponName.IsEmpty()
+			? FString::Printf(TEXT("%s  ->  %s"), *Event.KillerName, *Event.VictimName)
+			: FString::Printf(TEXT("%s  [%s]  %s"),
+				*Event.KillerName, *Event.WeaponName, *Event.VictimName);
+
+		// Ancho aproximado: la fuente pequeña ocupa unos 7 px por carácter.
+		const float Width = Line.Len() * 7.4f + 24.f;
+		const float X = Right - Width;
+
+		DrawRect(FLinearColor(0.02f, 0.03f, 0.05f, 0.45f * Alpha),
+			X, RowY - 3.f, Width, RowHeight - 3.f);
+
+		const FLinearColor LineColor = bInvolved
+			? FLinearColor(1.f, 0.85f, 0.3f, Alpha)
+			: FLinearColor(0.9f, 0.92f, 0.96f, Alpha);
+
+		DrawText(Line, LineColor, X + 12.f, RowY, GEngine->GetSmallFont(), 1.f);
+
+		++Visible;
+		if (Visible >= 5)
+		{
+			break;
+		}
+	}
+}
+
 void AShooterHUD::DrawColumns(float X, float Y, float Width)
 {
 	DrawText(TEXT("JUGADOR"), TextMuted, X + 28.f, Y, GEngine->GetSmallFont(), 1.f);
@@ -278,6 +346,17 @@ void AShooterHUD::DrawCrosshair(AShooterCharacter* Character)
 	const float CenterX = Canvas->ClipX * 0.5f;
 	const float CenterY = Canvas->ClipY * 0.5f;
 
+	// El jugador puede elegir el color de su mira (RF-11.8).
+	FLinearColor ActiveCrosshairColor = CrosshairColor;
+	if (const UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (const UShooterSettingsSubsystem* Settings =
+			GameInstance->GetSubsystem<UShooterSettingsSubsystem>())
+		{
+			ActiveCrosshairColor = Settings->GetCrosshairColor();
+		}
+	}
+
 	const AWeaponBase* Weapon = Character->GetCurrentWeapon();
 	const float SpreadDegrees = Weapon ? Weapon->GetCurrentSpreadDegrees() : 0.f;
 
@@ -290,7 +369,7 @@ void AShooterHUD::DrawCrosshair(AShooterCharacter* Character)
 	for (int32 Pass = 0; Pass < 2; ++Pass)
 	{
 		const bool bOutlinePass = (Pass == 0);
-		const FLinearColor Color = bOutlinePass ? Outline : CrosshairColor;
+		const FLinearColor Color = bOutlinePass ? Outline : ActiveCrosshairColor;
 		const float Extra = bOutlinePass ? 1.f : 0.f;
 		const float Weight = Thickness + (bOutlinePass ? 2.f : 0.f);
 
@@ -301,7 +380,7 @@ void AShooterHUD::DrawCrosshair(AShooterCharacter* Character)
 	}
 
 	// Punto central fijo: referencia estable mientras la mira se abre y cierra.
-	DrawRect(CrosshairColor, CenterX - 1.f, CenterY - 1.f, 2.f, 2.f);
+	DrawRect(ActiveCrosshairColor, CenterX - 1.f, CenterY - 1.f, 2.f, 2.f);
 }
 
 void AShooterHUD::DrawHitMarker(AShooterPlayerController* Controller)
@@ -538,9 +617,22 @@ void AShooterHUD::DrawRespawnCountdown(AShooterPlayerController* Controller)
 	const float PanelY = Canvas->ClipY * 0.42f;
 
 	DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.35f), 0.f, 0.f, Canvas->ClipX, Canvas->ClipY);
-	DrawPanel(this, CenterX - 170.f, PanelY - 16.f, 340.f, 80.f);
+	DrawPanel(this, CenterX - 180.f, PanelY - 16.f, 360.f, 104.f);
 
 	DrawText(TEXT("ELIMINADO"), AccentLow, CenterX - 62.f, PanelY, GEngine->GetLargeFont(), 1.5f);
+
+	// Quién te eliminó y con qué arma (RF-6.6).
+	const FString KillerName = Controller->GetLastKillerName();
+	if (!KillerName.IsEmpty())
+	{
+		const FString Weapon = Controller->GetLastKillerWeapon();
+		const FString Text = Weapon.IsEmpty()
+			? FString::Printf(TEXT("Te eliminó %s"), *KillerName)
+			: FString::Printf(TEXT("Te eliminó %s con %s"), *KillerName, *Weapon);
+
+		DrawText(Text, TextPrimary, CenterX - 120.f, PanelY + 34.f, GEngine->GetSmallFont(), 1.2f);
+	}
+
 	DrawText(FString::Printf(TEXT("Reapareces en %d"), FMath::CeilToInt(Countdown)), TextMuted,
-		CenterX - 78.f, PanelY + 36.f, GEngine->GetMediumFont(), 1.2f);
+		CenterX - 78.f, PanelY + 56.f, GEngine->GetMediumFont(), 1.2f);
 }

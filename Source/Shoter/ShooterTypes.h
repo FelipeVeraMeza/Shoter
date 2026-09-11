@@ -27,6 +27,29 @@ enum class EShooterTeam : uint8
 	Bravo	UMETA(DisplayName = "Bravo")
 };
 
+/** Una eliminación, para el registro en pantalla (RF-7.7) y el aviso de muerte (RF-6.6). */
+USTRUCT(BlueprintType)
+struct FShooterKillEvent
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly)
+	FString KillerName;
+
+	UPROPERTY(BlueprintReadOnly)
+	FString VictimName;
+
+	UPROPERTY(BlueprintReadOnly)
+	FString WeaponName;
+
+	UPROPERTY(BlueprintReadOnly)
+	bool bHeadshot = false;
+
+	/** Momento del mundo en que ocurrió: el HUD lo usa para desvanecer la línea. */
+	UPROPERTY(BlueprintReadOnly)
+	float WorldTime = 0.f;
+};
+
 /** Estado de un personaje en un instante pasado, para la compensación de latencia. */
 USTRUCT()
 struct FShooterFramePackage

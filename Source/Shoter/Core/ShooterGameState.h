@@ -23,6 +23,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Partida")
 	EShooterTeam GetWinningTeam() const;
 
+	/** Últimas eliminaciones, de más reciente a más antigua (RF-7.7). */
+	UFUNCTION(BlueprintPure, Category = "Partida")
+	const TArray<FShooterKillEvent>& GetKillFeed() const { return KillFeed; }
+
+	/** Solo servidor. Registra una eliminación y la replica a todos. */
+	void AddKillEvent(const FString& KillerName, const FString& VictimName,
+		const FString& WeaponName, bool bHeadshot);
+
 	/** Solo servidor. */
 	void SetMatchPhase(EMatchPhase NewPhase) { MatchPhase = NewPhase; }
 	void SetMatchEndWorldTime(float WorldTime) { MatchEndWorldTime = WorldTime; }
@@ -43,4 +51,10 @@ private:
 
 	UPROPERTY(Replicated)
 	int32 ScoreBravo = 0;
+
+	/** Se conservan solo las últimas: el HUD no muestra más de cinco. */
+	UPROPERTY(Replicated)
+	TArray<FShooterKillEvent> KillFeed;
+
+	static constexpr int32 MaxKillFeedEntries = 8;
 };

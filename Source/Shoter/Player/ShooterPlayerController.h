@@ -18,6 +18,19 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_NotifyDamageTaken(const FVector_NetQuantize& DamageSourceLocation);
 
+	/** Quién te eliminó y con qué, para mostrarlo al morir (RF-6.6). */
+	UFUNCTION(Client, Reliable)
+	void Client_NotifyKilledBy(const FString& KillerName, const FString& WeaponName);
+
+	UFUNCTION(BlueprintPure, Category = "HUD")
+	FString GetLastKillerName() const { return LastKillerName; }
+
+	UFUNCTION(BlueprintPure, Category = "HUD")
+	FString GetLastKillerWeapon() const { return LastKillerWeapon; }
+
+	/** Cuenta un disparo efectuado, para la precisión acumulada (RF-9.6). */
+	void RegisterShotFired();
+
 	/** Solo servidor. Informa al modo de juego y programa la reaparición. */
 	void OnCharacterDied(AController* Killer);
 
@@ -45,6 +58,9 @@ private:
 
 	float LastDamageTakenTime = -1000.f;
 	FVector LastDamageSourceLocation = FVector::ZeroVector;
+
+	FString LastKillerName;
+	FString LastKillerWeapon;
 
 	UPROPERTY(Replicated)
 	float RespawnWorldTime = 0.f;

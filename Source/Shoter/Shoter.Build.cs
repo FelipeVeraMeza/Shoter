@@ -23,7 +23,9 @@ public class Shoter : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
 			"Slate",
-			"SlateCore"
+			"SlateCore",
+			// Necesario para consultar las resoluciones del monitor (RNF-5.3).
+			"RHI"
 		});
 	}
 }

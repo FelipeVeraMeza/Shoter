@@ -11,6 +11,8 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
+#include "Settings/ShooterSettingsSubsystem.h"
+#include "Engine/GameInstance.h"
 #include "Net/UnrealNetwork.h"
 
 AShooterCharacter::AShooterCharacter()
@@ -198,8 +200,22 @@ void AShooterCharacter::Look(const FInputActionValue& Value)
 {
 	const FVector2D Axis = Value.Get<FVector2D>();
 
-	AddControllerYawInput(Axis.X);
-	AddControllerPitchInput(Axis.Y);
+	// Sensibilidad e inversión salen de los ajustes del jugador (RF-11.1).
+	float Sensitivity = 1.f;
+	float PitchSign = 1.f;
+
+	if (const UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (const UShooterSettingsSubsystem* Settings =
+			GameInstance->GetSubsystem<UShooterSettingsSubsystem>())
+		{
+			Sensitivity = Settings->GetMouseSensitivity();
+			PitchSign = Settings->GetInvertY() ? -1.f : 1.f;
+		}
+	}
+
+	AddControllerYawInput(Axis.X * Sensitivity);
+	AddControllerPitchInput(Axis.Y * Sensitivity * PitchSign);
 }
 
 AWeaponBase* AShooterCharacter::GetCurrentWeapon() const

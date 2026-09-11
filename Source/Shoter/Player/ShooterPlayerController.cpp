@@ -1,5 +1,7 @@
 #include "Player/ShooterPlayerController.h"
 #include "Core/ShooterGameMode.h"
+#include "Progression/ShooterProgressionSubsystem.h"
+#include "Engine/GameInstance.h"
 #include "Net/UnrealNetwork.h"
 
 void AShooterPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -13,12 +15,43 @@ void AShooterPlayerController::Client_NotifyHitConfirmed_Implementation(bool bHe
 {
 	LastHitConfirmedTime = GetWorld()->GetTimeSeconds();
 	bLastHitWasHeadshot = bHeadshot;
+
+	// Precisión acumulada (RF-9.6). El disparo se cuenta al efectuarlo, en
+	// RegisterShotFired; aquí solo se marca el acierto.
+	if (const UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (UShooterProgressionSubsystem* Progression =
+			GameInstance->GetSubsystem<UShooterProgressionSubsystem>())
+		{
+			Progression->RecordShot(true);
+		}
+	}
+}
+
+void AShooterPlayerController::RegisterShotFired()
+{
+	if (const UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (UShooterProgressionSubsystem* Progression =
+			GameInstance->GetSubsystem<UShooterProgressionSubsystem>())
+		{
+			// Un disparo sin acierto; el impacto lo confirma el servidor aparte.
+			Progression->RecordShot(false);
+		}
+	}
 }
 
 void AShooterPlayerController::Client_NotifyDamageTaken_Implementation(const FVector_NetQuantize& DamageSourceLocation)
 {
 	LastDamageTakenTime = GetWorld()->GetTimeSeconds();
 	LastDamageSourceLocation = DamageSourceLocation;
+}
+
+void AShooterPlayerController::Client_NotifyKilledBy_Implementation(
+	const FString& KillerName, const FString& WeaponName)
+{
+	LastKillerName = KillerName;
+	LastKillerWeapon = WeaponName;
 }
 
 float AShooterPlayerController::GetTimeSinceHitConfirmed() const

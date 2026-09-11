@@ -53,8 +53,14 @@ protected:
 private:
 	FTimerHandle MatchTimerHandle;
 
+	/** Momento en que arrancó la partida, para medir su duración. */
+	float MatchStartWorldTime = 0.f;
+
 	void StartMatch();
 	void FinishMatch();
+
+	/** Otorga la XP de la partida al jugador local (RF-9.1). */
+	void AwardEndOfMatchExperience();
 	void RespawnPlayer(AShooterPlayerController* Controller);
 	EShooterTeam ChooseTeamForNewPlayer() const;
 	void CheckWinCondition();
