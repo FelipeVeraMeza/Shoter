@@ -27,6 +27,26 @@ enum class EShooterTeam : uint8
 	Bravo	UMETA(DisplayName = "Bravo")
 };
 
+/** Modo de juego activo. Determina la condición de victoria (RF-8.1 a RF-8.4). */
+UENUM(BlueprintType)
+enum class EShooterGameModeType : uint8
+{
+	FreeForAll	UMETA(DisplayName = "Todos contra todos"),
+	TeamDeathmatch	UMETA(DisplayName = "Equipos"),
+	Domination	UMETA(DisplayName = "Dominación"),
+	Waves		UMETA(DisplayName = "Oleadas")
+};
+
+/** Estado de captura de una zona de Dominación (RF-8.3). */
+UENUM(BlueprintType)
+enum class EZoneState : uint8
+{
+	Neutral		UMETA(DisplayName = "Neutral"),
+	Capturing	UMETA(DisplayName = "Capturándose"),
+	Captured	UMETA(DisplayName = "Capturada"),
+	Contested	UMETA(DisplayName = "Disputada")
+};
+
 /** Una eliminación, para el registro en pantalla (RF-7.7) y el aviso de muerte (RF-6.6). */
 USTRUCT(BlueprintType)
 struct FShooterKillEvent

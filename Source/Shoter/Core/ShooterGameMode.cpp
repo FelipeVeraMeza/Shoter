@@ -49,7 +49,8 @@ void AShooterGameMode::StartMatch()
 		{
 			Telemetry->RecordMatchStart(
 				GetWorld()->GetMapName(),
-				bTeamBased ? TEXT("Equipos") : TEXT("TodosContraTodos"));
+				StaticEnum<EShooterGameModeType>()->GetNameStringByValue(
+					static_cast<int64>(GameModeType)));
 		}
 	}
 
@@ -73,6 +74,14 @@ void AShooterGameMode::StartMatch()
 	ShooterGameState->SetMatchEndWorldTime(GetWorld()->GetTimeSeconds() + MatchDuration);
 
 	GetWorldTimerManager().SetTimer(MatchTimerHandle, this, &AShooterGameMode::FinishMatch, MatchDuration, false);
+
+	// En Dominación los puntos los generan las zonas de forma continua, así
+	// que la victoria no puede detectarse solo al morir alguien.
+	if (GameModeType == EShooterGameModeType::Domination)
+	{
+		GetWorldTimerManager().SetTimer(DominationCheckHandle, this,
+			&AShooterGameMode::CheckWinCondition, 1.f, true);
+	}
 }
 
 void AShooterGameMode::FinishMatch()
@@ -83,6 +92,7 @@ void AShooterGameMode::FinishMatch()
 	}
 
 	GetWorldTimerManager().ClearTimer(MatchTimerHandle);
+	GetWorldTimerManager().ClearTimer(DominationCheckHandle);
 
 	AwardEndOfMatchExperience();
 }
@@ -282,7 +292,10 @@ void AShooterGameMode::OnPlayerKilled(AShooterPlayerController* Victim, AControl
 				}
 			}
 
-			if (bTeamBased && ShooterGameState)
+			// En Dominación el marcador lo llevan las zonas: sumar también por
+			// baja convertiría el modo en un combate por equipos con adorno.
+			if (bTeamBased && ShooterGameState
+				&& GameModeType != EShooterGameModeType::Domination)
 			{
 				ShooterGameState->AddTeamScore(KillerState->GetTeam(), 1);
 			}

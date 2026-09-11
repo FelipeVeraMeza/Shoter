@@ -38,6 +38,9 @@ private:
 	void DrawHealth(AShooterCharacter* Character);
 	void DrawAmmo(AShooterCharacter* Character);
 	void DrawMatchInfo();
+
+	/** Estado de las zonas de Dominación: quién controla cada una (RF-8.3). */
+	void DrawControlZones();
 	void DrawDamageIndicator(AShooterCharacter* Character, AShooterPlayerController* Controller);
 	void DrawRespawnCountdown(AShooterPlayerController* Controller);
 

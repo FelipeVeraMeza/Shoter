@@ -38,6 +38,13 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Reglas")
 	bool bTeamBased = true;
 
+	/**
+	 * Modo activo. Determina de dónde salen los puntos: de las eliminaciones
+	 * en los modos de combate, de las zonas en Dominación (RF-8.3).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Reglas")
+	EShooterGameModeType GameModeType = EShooterGameModeType::TeamDeathmatch;
+
 	/** Distancia mínima deseada a un enemigo al reaparecer (RF-6.5). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Reglas", meta = (ClampMin = "0.0"))
 	float MinimumSafeSpawnDistance = 2500.f;
@@ -94,4 +101,10 @@ private:
 	void RespawnPlayer(AShooterPlayerController* Controller);
 	EShooterTeam ChooseTeamForNewPlayer() const;
 	void CheckWinCondition();
+
+	/**
+	 * En Dominación el marcador sube solo, sin que muera nadie, así que la
+	 * victoria no puede comprobarse únicamente al registrar una eliminación.
+	 */
+	FTimerHandle DominationCheckHandle;
 };

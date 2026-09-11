@@ -3,6 +3,8 @@
 #include "Player/ShooterPlayerController.h"
 #include "Core/ShooterGameState.h"
 #include "Core/ShooterPlayerState.h"
+#include "Core/ControlZone.h"
+#include "Kismet/GameplayStatics.h"
 #include "Combat/HealthComponent.h"
 #include "Weapons/WeaponBase.h"
 #include "Weapons/WeaponDataAsset.h"
@@ -56,6 +58,7 @@ void AShooterHUD::DrawHUD()
 	}
 
 	DrawKillFeed();
+	DrawControlZones();
 
 	if (ShooterPC)
 	{
@@ -557,6 +560,70 @@ void AShooterHUD::DrawAmmo(AShooterCharacter* Character)
 		DrawText(FText::Format(LOCTEXT("GrenadeCount", "G x{Count}"),
 			FFormatNamedArguments{ { TEXT("Count"), FText::AsNumber(Grenades) } }).ToString(),
 			TextMuted, X + PanelWidth - 54.f, Y + 4.f, GEngine->GetSmallFont(), 1.1f);
+	}
+}
+
+void AShooterHUD::DrawControlZones()
+{
+	// Sin zonas en el nivel, el modo no es Dominación y no hay nada que dibujar.
+	TArray<AActor*> Zones;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AControlZone::StaticClass(), Zones);
+	if (Zones.Num() == 0)
+	{
+		return;
+	}
+
+	// Orden estable por etiqueta: si dependiera del orden de búsqueda, las
+	// zonas bailarían en pantalla entre partidas.
+	Zones.Sort([](const AActor& A, const AActor& B)
+	{
+		return CastChecked<AControlZone>(&A)->ZoneLabel
+			 < CastChecked<AControlZone>(&B)->ZoneLabel;
+	});
+
+	const float BoxSize = 46.f;
+	const float Spacing = 12.f;
+	const float TotalWidth = Zones.Num() * BoxSize + (Zones.Num() - 1) * Spacing;
+	const float StartX = (Canvas->ClipX - TotalWidth) * 0.5f;
+	const float Y = 92.f;
+
+	for (int32 Index = 0; Index < Zones.Num(); ++Index)
+	{
+		const AControlZone* Zone = CastChecked<AControlZone>(Zones[Index]);
+		const float X = StartX + Index * (BoxSize + Spacing);
+
+		FLinearColor BoxColor;
+		switch (Zone->GetOwningTeam())
+		{
+		case EShooterTeam::Alpha: BoxColor = FLinearColor(0.15f, 0.5f, 1.f, 0.85f); break;
+		case EShooterTeam::Bravo: BoxColor = FLinearColor(1.f, 0.3f, 0.15f, 0.85f); break;
+		default: BoxColor = FLinearColor(0.35f, 0.35f, 0.4f, 0.75f); break;
+		}
+
+		DrawRect(BoxColor, X, Y, BoxSize, BoxSize);
+
+		// Una zona en disputa parpadea: es la señal de que hay combate allí.
+		if (Zone->GetZoneState() == EZoneState::Contested)
+		{
+			const float Pulse = 0.5f + 0.5f * FMath::Sin(GetWorld()->GetTimeSeconds() * 8.f);
+			DrawRect(FLinearColor(1.f, 0.9f, 0.2f, Pulse * 0.6f), X, Y, BoxSize, BoxSize);
+		}
+
+		// Barra de progreso mientras alguien captura.
+		const float Progress = Zone->GetCaptureProgress();
+		if (Progress > 0.f && Progress < 1.f)
+		{
+			const FLinearColor ProgressColor =
+				(Zone->GetCapturingTeam() == EShooterTeam::Alpha)
+					? FLinearColor(0.3f, 0.7f, 1.f, 1.f)
+					: FLinearColor(1.f, 0.5f, 0.3f, 1.f);
+
+			DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.6f), X, Y + BoxSize + 2.f, BoxSize, 5.f);
+			DrawRect(ProgressColor, X, Y + BoxSize + 2.f, BoxSize * Progress, 5.f);
+		}
+
+		DrawText(Zone->ZoneLabel, TextPrimary, X + BoxSize * 0.5f - 6.f, Y + 14.f,
+			GEngine->GetMediumFont(), 1.3f);
 	}
 }
 
