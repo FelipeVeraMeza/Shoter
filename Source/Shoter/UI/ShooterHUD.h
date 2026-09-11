@@ -41,6 +41,9 @@ private:
 
 	/** Estado de las zonas de Dominación: quién controla cada una (RF-8.3). */
 	void DrawControlZones();
+
+	/** Oleada actual y enemigos restantes (RF-8.4). */
+	void DrawWaveInfo();
 	void DrawDamageIndicator(AShooterCharacter* Character, AShooterPlayerController* Controller);
 	void DrawRespawnCountdown(AShooterPlayerController* Controller);
 

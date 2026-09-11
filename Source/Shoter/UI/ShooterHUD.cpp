@@ -4,6 +4,7 @@
 #include "Core/ShooterGameState.h"
 #include "Core/ShooterPlayerState.h"
 #include "Core/ControlZone.h"
+#include "Core/WaveManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Combat/HealthComponent.h"
 #include "Weapons/WeaponBase.h"
@@ -59,6 +60,7 @@ void AShooterHUD::DrawHUD()
 
 	DrawKillFeed();
 	DrawControlZones();
+	DrawWaveInfo();
 
 	if (ShooterPC)
 	{
@@ -624,6 +626,47 @@ void AShooterHUD::DrawControlZones()
 
 		DrawText(Zone->ZoneLabel, TextPrimary, X + BoxSize * 0.5f - 6.f, Y + 14.f,
 			GEngine->GetMediumFont(), 1.3f);
+	}
+}
+
+void AShooterHUD::DrawWaveInfo()
+{
+	// Sin gestor en el nivel no es una partida de Oleadas.
+	AActor* ManagerActor = UGameplayStatics::GetActorOfClass(GetWorld(), AWaveManager::StaticClass());
+	const AWaveManager* Manager = Cast<AWaveManager>(ManagerActor);
+	if (!Manager || Manager->GetCurrentWave() <= 0)
+	{
+		return;
+	}
+
+	const float PanelWidth = 210.f;
+	const float X = (Canvas->ClipX - PanelWidth) * 0.5f;
+	const float Y = 92.f;
+
+	DrawPanel(this, X, Y, PanelWidth, 54.f);
+
+	FFormatNamedArguments WaveArgs;
+	WaveArgs.Add(TEXT("Wave"), FText::AsNumber(Manager->GetCurrentWave()));
+	DrawText(FText::Format(LOCTEXT("WaveNumber", "OLEADA {Wave}"), WaveArgs).ToString(),
+		TextPrimary, X + 18.f, Y + 8.f, GEngine->GetMediumFont(), 1.2f);
+
+	if (Manager->IsWaveInProgress())
+	{
+		FFormatNamedArguments EnemyArgs;
+		EnemyArgs.Add(TEXT("Count"), FText::AsNumber(Manager->GetEnemiesRemaining()));
+		DrawText(FText::Format(
+			LOCTEXT("EnemiesLeft", "{Count} {Count}|plural(one=enemigo,other=enemigos)"),
+			EnemyArgs).ToString(),
+			TextMuted, X + 18.f, Y + 32.f, GEngine->GetSmallFont(), 1.1f);
+	}
+	else
+	{
+		// Entre oleadas se muestra la cuenta atrás: es el momento de recargar.
+		FFormatNamedArguments NextArgs;
+		NextArgs.Add(TEXT("Seconds"),
+			FText::AsNumber(FMath::CeilToInt(Manager->GetTimeUntilNextWave())));
+		DrawText(FText::Format(LOCTEXT("NextWaveIn", "Siguiente en {Seconds}"), NextArgs).ToString(),
+			FLinearColor(0.98f, 0.75f, 0.2f, 1.f), X + 18.f, Y + 32.f, GEngine->GetSmallFont(), 1.1f);
 	}
 }
 
