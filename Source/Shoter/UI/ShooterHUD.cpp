@@ -454,7 +454,7 @@ void AShooterHUD::DrawHealth(AShooterCharacter* Character)
 	}
 
 	DrawText(FString::Printf(TEXT("%d"), Points), TextPrimary,
-		X + BarWidth + 16.f, Y - 8.f, GEngine->GetMediumFont(), 1.5f);
+		X + BarWidth + 16.f, Y - 10.f, GEngine->GetLargeFont(), 1.2f);
 }
 
 void AShooterHUD::DrawAmmo(AShooterCharacter* Character)
@@ -481,7 +481,7 @@ void AShooterHUD::DrawAmmo(AShooterCharacter* Character)
 	if (Weapon->IsReloading())
 	{
 		DrawText(TEXT("RECARGANDO"), FLinearColor(0.98f, 0.75f, 0.2f, 1.f),
-			X, Y + 22.f, GEngine->GetMediumFont(), 1.5f);
+			X, Y + 24.f, GEngine->GetMediumFont(), 1.1f);
 		return;
 	}
 
@@ -496,11 +496,11 @@ void AShooterHUD::DrawAmmo(AShooterCharacter* Character)
 		: (Current > 0 ? FLinearColor(0.98f, 0.75f, 0.2f, 1.f) : AccentLow);
 
 	DrawText(FString::Printf(TEXT("%d"), Current), CurrentColor,
-		X, Y + 20.f, GEngine->GetMediumFont(), 2.2f);
+		X, Y + 18.f, GEngine->GetLargeFont(), 1.6f);
 
 	const float CurrentWidth = Current >= 10 ? 46.f : 26.f;
 	DrawText(FString::Printf(TEXT("/ %d"), Reserve), TextMuted,
-		X + CurrentWidth, Y + 34.f, GEngine->GetMediumFont(), 1.2f);
+		X + CurrentWidth, Y + 36.f, GEngine->GetMediumFont(), 1.f);
 
 	if (Current <= 0)
 	{
@@ -531,7 +531,7 @@ void AShooterHUD::DrawMatchInfo()
 	if (bTraining)
 	{
 		DrawText(TEXT("ENTRENAMIENTO"), TextPrimary,
-			PanelX + 26.f, 26.f, GEngine->GetMediumFont(), 1.4f);
+			PanelX + 24.f, 27.f, GEngine->GetMediumFont(), 1.1f);
 	}
 	else
 	{
@@ -543,7 +543,7 @@ void AShooterHUD::DrawMatchInfo()
 		const FLinearColor TimeColor = (bInProgress && TimeRemaining <= 60.f)
 			? AccentLow : TextPrimary;
 
-		DrawText(TimeText, TimeColor, PanelX + 30.f, 24.f, GEngine->GetMediumFont(), 1.7f);
+		DrawText(TimeText, TimeColor, PanelX + 32.f, 24.f, GEngine->GetLargeFont(), 1.3f);
 
 		const FString ScoreText = FString::Printf(TEXT("%d  -  %d"),
 			ShooterGameState->GetTeamScore(EShooterTeam::Alpha),

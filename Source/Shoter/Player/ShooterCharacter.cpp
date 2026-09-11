@@ -231,8 +231,11 @@ void AShooterCharacter::Look(const FInputActionValue& Value)
 		}
 	}
 
+	// AddControllerPitchInput mira hacia abajo con valores positivos, pero el
+	// ratón entrega Y positivo al desplazarse hacia arriba: hay que negarlo
+	// para que el control no salga invertido por defecto.
 	AddControllerYawInput(Axis.X * Sensitivity);
-	AddControllerPitchInput(Axis.Y * Sensitivity * PitchSign);
+	AddControllerPitchInput(-Axis.Y * Sensitivity * PitchSign);
 }
 
 AWeaponBase* AShooterCharacter::GetCurrentWeapon() const

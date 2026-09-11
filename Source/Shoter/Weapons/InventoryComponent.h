@@ -25,6 +25,21 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventario")
 	TArray<TSubclassOf<AWeaponBase>> DefaultWeapons;
 
+	/**
+	 * Colocación del arma respecto a la cámara, mientras el personaje no tenga
+	 * un socket de mano. Adelante, a la derecha y algo por debajo del centro.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventario|Vista")
+	FVector FirstPersonOffset = FVector(40.f, 16.f, -18.f);
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventario|Vista")
+	FRotator FirstPersonRotation = FRotator(0.f, 0.f, 0.f);
+
+	/** Las mallas de arma suelen ser de tamaño real: en vista de cañón estorban. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventario|Vista",
+		meta = (ClampMin = "0.05", ClampMax = "2.0"))
+	float FirstPersonScale = 0.12f;
+
 	UFUNCTION(BlueprintPure, Category = "Inventario")
 	AWeaponBase* GetCurrentWeapon() const { return CurrentWeapon; }
 

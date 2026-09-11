@@ -18,6 +18,9 @@ FPS arcade multijugador en **Unreal Engine 5.8** (C++), para PC vía Steam.
 | [**ARQUITECTURA.md**](docs/ARQUITECTURA.md) | Modelo de red, clases, decisiones técnicas irreversibles |
 | [**PLANIFICACION.md**](docs/PLANIFICACION.md) | Fases, sprints, hitos, riesgos, presupuesto y marketing |
 | [**ZONA_ENTRENAMIENTO.md**](docs/ZONA_ENTRENAMIENTO.md) | Nivel de pruebas: cómo generarlo y qué validar en él |
+| [**SISTEMAS.md**](docs/SISTEMAS.md) | Los subsistemas de C++: qué hace cada uno y cómo usarlo |
+| [**TRAZABILIDAD.md**](docs/TRAZABILIDAD.md) | Los 152 requerimientos contra el código, con su estado real |
+| [**BITACORA.md**](docs/BITACORA.md) | Historia del proyecto: decisiones, errores y cómo se resolvieron |
 
 **Si es tu primera vez en el proyecto, lee en este orden:** GDD → Requerimientos →
 Arquitectura → Planificación.
@@ -158,7 +161,11 @@ Shoter/
 │       ├── Player/             Personaje y controlador
 │       ├── Weapons/            Armas, datos de balance e inventario
 │       ├── Combat/             Salud, compensación de latencia, blancos
-│       └── UI/                 HUD
+│       ├── Progression/        XP, niveles, desbloqueos y guardado
+│       ├── Settings/           Ajustes de control, vídeo y audio
+│       ├── Telemetry/          Registro de eventos de partida
+│       └── UI/                 HUD y navegación de menús
+├── Content/Python/             Scripts de generación en el editor
 ├── docs/                       Documentación del proyecto
 └── .gitattributes              Configuración de Git LFS
 ```
@@ -176,6 +183,7 @@ vive en `Source/Shoter` (RNF-9.2).
 | Documentación y diseño | ✅ |
 | Sistemas de combate multijugador en C++ | ✅ |
 | Port a UE 5.8 con Enhanced Input | ✅ |
+| Progresión, ajustes, telemetría y menús | ✅ |
 | F0 · Preproducción y pipeline | 🔄 |
 | F1 · Rebanada vertical (contenido y validación) | 🔄 |
 | F2 · Producción de contenido | ⬜ |

@@ -151,7 +151,9 @@ void UInventoryComponent::AttachWeaponToOwner(AWeaponBase* Weapon)
 	if (UCameraComponent* Camera = Character->GetFirstPersonCamera())
 	{
 		Weapon->AttachToComponent(Camera, Rules);
-		Weapon->SetActorRelativeLocation(FVector(30.f, 12.f, -10.f));
+		Weapon->SetActorRelativeLocation(FirstPersonOffset);
+		Weapon->SetActorRelativeRotation(FirstPersonRotation);
+		Weapon->SetActorScale3D(FVector(FirstPersonScale));
 	}
 }
 
