@@ -40,6 +40,29 @@ public:
 		meta = (ClampMin = "0.05", ClampMax = "2.0"))
 	float FirstPersonScale = 0.12f;
 
+	/**
+	 * Balanceo del arma al caminar (RF5). Da sensación de peso: sin él el
+	 * arma parece pegada a la pantalla.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventario|Balanceo",
+		meta = (ClampMin = "0.0"))
+	float BobAmount = 1.6f;
+
+	/** Ciclos de balanceo por segundo a velocidad de marcha. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventario|Balanceo",
+		meta = (ClampMin = "0.1"))
+	float BobFrequency = 7.f;
+
+	/** Cuánto se amplifica el balanceo al correr. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventario|Balanceo",
+		meta = (ClampMin = "1.0"))
+	float SprintBobMultiplier = 1.8f;
+
+	/** Rapidez con que el arma vuelve al centro al detenerse. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventario|Balanceo",
+		meta = (ClampMin = "0.1"))
+	float BobRecoverySpeed = 8.f;
+
 	UFUNCTION(BlueprintPure, Category = "Inventario")
 	AWeaponBase* GetCurrentWeapon() const { return CurrentWeapon; }
 
@@ -54,6 +77,8 @@ public:
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+		FActorComponentTickFunction* ThisTickFunction) override;
 
 private:
 	UPROPERTY(Replicated)
@@ -72,4 +97,13 @@ private:
 
 	void AttachWeaponToOwner(AWeaponBase* Weapon);
 	AShooterCharacter* GetShooterOwner() const;
+
+	/** Balanceo del arma según la velocidad del portador (RF5). */
+	void UpdateWeaponBob(float DeltaTime);
+
+	/** Fase del ciclo de balanceo, en radianes. */
+	float BobPhase = 0.f;
+
+	/** Desplazamiento actual, interpolado para que no dé saltos. */
+	FVector CurrentBobOffset = FVector::ZeroVector;
 };

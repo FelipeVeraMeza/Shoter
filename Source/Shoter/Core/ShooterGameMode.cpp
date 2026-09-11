@@ -8,6 +8,7 @@
 #include "Weapons/WeaponDataAsset.h"
 #include "Progression/ShooterProgressionSubsystem.h"
 #include "Telemetry/ShooterTelemetrySubsystem.h"
+#include "AIController.h"
 #include "Engine/GameInstance.h"
 #include "Engine/Engine.h"
 #include "GameFramework/PlayerStart.h"
@@ -53,6 +54,14 @@ void AShooterGameMode::StartMatch()
 	}
 
 	MatchStartWorldTime = GetWorld()->GetTimeSeconds();
+
+	// Rellenar con bots tras un margen, para no crearlos antes de que los
+	// jugadores humanos terminen de entrar (RF-3.6).
+	if (DesiredPlayerCount > 0 && BotControllerClass)
+	{
+		GetWorldTimerManager().SetTimer(BotFillTimerHandle, this,
+			&AShooterGameMode::FillWithBots, FMath::Max(BotFillDelay, 0.1f), false);
+	}
 
 	// En modo entrenamiento la partida no termina: sin cronómetro ni marcador final.
 	if (bEndlessMatch)
@@ -118,6 +127,80 @@ void AShooterGameMode::AwardEndOfMatchExperience()
 		Telemetry->RecordMatchEnd(
 			GetWorld()->GetTimeSeconds() - MatchStartWorldTime,
 			State->GetKills(), State->GetDeaths());
+	}
+}
+
+void AShooterGameMode::FillWithBots()
+{
+	if (DesiredPlayerCount <= 0 || !BotControllerClass)
+	{
+		return;
+	}
+
+	const AGameStateBase* CurrentState = GameState;
+	const int32 HumanCount = CurrentState ? CurrentState->PlayerArray.Num() : 0;
+	const int32 Missing = DesiredPlayerCount - HumanCount - SpawnedBots.Num();
+
+	for (int32 Index = 0; Index < Missing; ++Index)
+	{
+		SpawnBot();
+	}
+
+	if (Missing > 0)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Bots] %d creados; %d humanos en partida"),
+			Missing, HumanCount);
+	}
+}
+
+void AShooterGameMode::SpawnBot()
+{
+	if (!BotControllerClass || !DefaultPawnClass)
+	{
+		return;
+	}
+
+	FActorSpawnParameters ControllerParams;
+	ControllerParams.SpawnCollisionHandlingOverride =
+		ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	AAIController* BotController = GetWorld()->SpawnActor<AAIController>(
+		BotControllerClass, FVector::ZeroVector, FRotator::ZeroRotator, ControllerParams);
+
+	if (!BotController)
+	{
+		return;
+	}
+
+	// ChoosePlayerStart aplica también a los bots: aparecen lejos del enemigo.
+	AActor* StartSpot = ChoosePlayerStart(BotController);
+	const FTransform SpawnTransform = StartSpot
+		? StartSpot->GetActorTransform()
+		: FTransform::Identity;
+
+	FActorSpawnParameters PawnParams;
+	PawnParams.SpawnCollisionHandlingOverride =
+		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+	APawn* BotPawn = GetWorld()->SpawnActor<APawn>(
+		DefaultPawnClass, SpawnTransform, PawnParams);
+
+	if (!BotPawn)
+	{
+		BotController->Destroy();
+		return;
+	}
+
+	BotController->Possess(BotPawn);
+	SpawnedBots.Add(BotPawn);
+
+	// Los bots también se reparten entre equipos, igual que los humanos.
+	if (bTeamBased)
+	{
+		if (AShooterPlayerState* BotState = BotController->GetPlayerState<AShooterPlayerState>())
+		{
+			BotState->SetTeam(ChooseTeamForNewPlayer());
+		}
 	}
 }
 

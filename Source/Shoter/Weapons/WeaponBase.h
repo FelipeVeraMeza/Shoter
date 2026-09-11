@@ -49,6 +49,10 @@ public:
 
 	void SetOwningCharacter(AShooterCharacter* InCharacter);
 
+	/** Cargador lleno y reserva al máximo, sin esperar la recarga (RF6). */
+	UFUNCTION(BlueprintCallable, Category = "Arma")
+	void ResetAmmo();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;

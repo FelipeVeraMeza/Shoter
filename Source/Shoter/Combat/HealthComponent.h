@@ -36,6 +36,20 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Salud", meta = (ClampMin = "0.0"))
 	float RegenRate = 25.f;
 
+	/**
+	 * Ignora todo el daño recibido (RF3). Pensado para la zona de
+	 * entrenamiento, donde morir interrumpe la práctica.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Salud")
+	bool bInvulnerable = false;
+
+	UFUNCTION(BlueprintCallable, Category = "Salud")
+	void SetInvulnerable(bool bNewInvulnerable);
+
+	/** Devuelve la salud al máximo y revive si estaba muerto (RF6). */
+	UFUNCTION(BlueprintCallable, Category = "Salud")
+	void ResetHealth();
+
 	UFUNCTION(BlueprintPure, Category = "Salud")
 	float GetHealth() const { return Health; }
 

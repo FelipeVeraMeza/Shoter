@@ -6,6 +6,7 @@
 #include "ShooterGameMode.generated.h"
 
 class AShooterPlayerController;
+class AAIController;
 
 UCLASS()
 class SHOTER_API AShooterGameMode : public AGameModeBase
@@ -41,6 +42,27 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Reglas", meta = (ClampMin = "0.0"))
 	float MinimumSafeSpawnDistance = 2500.f;
 
+	/**
+	 * Jugadores que debe haber en la partida. Si faltan, se rellenan con bots
+	 * (RF-3.6). Cero desactiva el relleno.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Bots", meta = (ClampMin = "0", ClampMax = "16"))
+	int32 DesiredPlayerCount = 0;
+
+	/** Controlador de los bots. Sin esto no se crea ninguno. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Bots")
+	TSubclassOf<AAIController> BotControllerClass;
+
+	/** Segundos tras el inicio antes de rellenar, para dar tiempo a que entren jugadores. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Bots", meta = (ClampMin = "0.0"))
+	float BotFillDelay = 3.f;
+
+	UFUNCTION(BlueprintCallable, Category = "Bots")
+	void SpawnBot();
+
+	UFUNCTION(BlueprintPure, Category = "Bots")
+	int32 GetBotCount() const { return SpawnedBots.Num(); }
+
 	/** Solo servidor. Registra la eliminación y programa la reaparición. */
 	void OnPlayerKilled(AShooterPlayerController* Victim, AController* Killer);
 
@@ -56,11 +78,19 @@ private:
 	/** Momento en que arrancó la partida, para medir su duración. */
 	float MatchStartWorldTime = 0.f;
 
+	FTimerHandle BotFillTimerHandle;
+
+	UPROPERTY()
+	TArray<TObjectPtr<APawn>> SpawnedBots;
+
 	void StartMatch();
 	void FinishMatch();
 
 	/** Otorga la XP de la partida al jugador local (RF-9.1). */
 	void AwardEndOfMatchExperience();
+
+	/** Crea los bots que falten para alcanzar DesiredPlayerCount (RF-3.6). */
+	void FillWithBots();
 	void RespawnPlayer(AShooterPlayerController* Controller);
 	EShooterTeam ChooseTeamForNewPlayer() const;
 	void CheckWinCondition();

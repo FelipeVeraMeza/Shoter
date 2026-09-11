@@ -19,7 +19,10 @@ public class Shoter : ModuleRules
 			"EnhancedInput",
 			"Niagara",
 			// Menús y HUD en widgets (RF-2).
-			"UMG"
+			"UMG",
+			// Bots: navegación y percepción (RF-3.6, RF-8.4).
+			"AIModule",
+			"NavigationSystem"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]

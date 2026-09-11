@@ -12,6 +12,10 @@
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
 
+// Todo texto visible pasa por LOCTEXT: así se extrae a las tablas de
+// localización sin tocar el código (RNF-6.1).
+#define LOCTEXT_NAMESPACE "ShooterHUD"
+
 namespace
 {
 	const FLinearColor PanelBackground(0.02f, 0.03f, 0.05f, 0.55f);
@@ -137,7 +141,7 @@ void AShooterHUD::DrawScoreboard()
 	DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.72f), 0.f, 0.f, Canvas->ClipX, Canvas->ClipY);
 	DrawPanel(this, X, Y, Width, Height);
 
-	DrawText(TEXT("PARTIDA TERMINADA"), FLinearColor(1.f, 0.85f, 0.25f, 1.f),
+	DrawText(LOCTEXT("MatchOver", "PARTIDA TERMINADA").ToString(), FLinearColor(1.f, 0.85f, 0.25f, 1.f),
 		X + 28.f, Y + 22.f, GEngine->GetLargeFont(), 1.7f);
 
 	// En modo por equipos gana el equipo con más puntos; en todos contra todos,
@@ -199,7 +203,7 @@ void AShooterHUD::DrawLiveScoreboard()
 
 	DrawPanel(this, X, Y, Width, Height);
 
-	DrawText(TEXT("TABLA DE POSICIONES"), TextPrimary,
+	DrawText(LOCTEXT("Scoreboard", "TABLA DE POSICIONES").ToString(), TextPrimary,
 		X + 24.f, Y + 14.f, GEngine->GetMediumFont(), 1.2f);
 
 	DrawColumns(X, Y + HeaderHeight - 22.f, Width);
@@ -272,10 +276,10 @@ void AShooterHUD::DrawKillFeed()
 
 void AShooterHUD::DrawColumns(float X, float Y, float Width)
 {
-	DrawText(TEXT("JUGADOR"), TextMuted, X + 28.f, Y, GEngine->GetSmallFont(), 1.f);
-	DrawText(TEXT("EQUIPO"), TextMuted, X + Width - 250.f, Y, GEngine->GetSmallFont(), 1.f);
-	DrawText(TEXT("BAJAS"), TextMuted, X + Width - 160.f, Y, GEngine->GetSmallFont(), 1.f);
-	DrawText(TEXT("MUERTES"), TextMuted, X + Width - 92.f, Y, GEngine->GetSmallFont(), 1.f);
+	DrawText(LOCTEXT("ColPlayer", "JUGADOR").ToString(), TextMuted, X + 28.f, Y, GEngine->GetSmallFont(), 1.f);
+	DrawText(LOCTEXT("ColTeam", "EQUIPO").ToString(), TextMuted, X + Width - 250.f, Y, GEngine->GetSmallFont(), 1.f);
+	DrawText(LOCTEXT("ColKills", "BAJAS").ToString(), TextMuted, X + Width - 160.f, Y, GEngine->GetSmallFont(), 1.f);
+	DrawText(LOCTEXT("ColDeaths", "MUERTES").ToString(), TextMuted, X + Width - 92.f, Y, GEngine->GetSmallFont(), 1.f);
 
 	DrawRect(PanelBorder, X + 20.f, Y + 18.f, Width - 40.f, 1.f);
 }
@@ -285,7 +289,7 @@ void AShooterHUD::DrawPlayerRows(const TArray<const AShooterPlayerState*>& Playe
 {
 	if (Players.Num() == 0)
 	{
-		DrawText(TEXT("Sin jugadores"), TextMuted, X + 28.f, Y + 6.f, GEngine->GetSmallFont(), 1.1f);
+		DrawText(LOCTEXT("NoPlayers", "Sin jugadores").ToString(), TextMuted, X + 28.f, Y + 6.f, GEngine->GetSmallFont(), 1.1f);
 		return;
 	}
 
@@ -414,7 +418,7 @@ void AShooterHUD::DrawHitMarker(AShooterPlayerController* Controller)
 
 	if (bHeadshot)
 	{
-		DrawText(TEXT("CABEZA"), FLinearColor(1.f, 0.45f, 0.2f, Alpha),
+		DrawText(LOCTEXT("Headshot", "CABEZA").ToString(), FLinearColor(1.f, 0.45f, 0.2f, Alpha),
 			CenterX - 32.f, CenterY - 46.f, GEngine->GetMediumFont(), 1.1f);
 	}
 }
@@ -441,7 +445,7 @@ void AShooterHUD::DrawHealth(AShooterCharacter* Character)
 
 	DrawPanel(this, X - 14.f, Y - 26.f, BarWidth + 96.f, 52.f);
 
-	DrawText(TEXT("SALUD"), TextMuted, X, Y - 18.f, GEngine->GetSmallFont(), 1.f);
+	DrawText(LOCTEXT("Health", "SALUD").ToString(), TextMuted, X, Y - 18.f, GEngine->GetSmallFont(), 1.f);
 
 	DrawRect(FLinearColor(1.f, 1.f, 1.f, 0.08f), X, Y, BarWidth, BarHeight);
 	DrawRect(FillColor, X, Y, BarWidth * Percent, BarHeight);
@@ -480,7 +484,7 @@ void AShooterHUD::DrawAmmo(AShooterCharacter* Character)
 
 	if (Weapon->IsReloading())
 	{
-		DrawText(TEXT("RECARGANDO"), FLinearColor(0.98f, 0.75f, 0.2f, 1.f),
+		DrawText(LOCTEXT("Reloading", "RECARGANDO").ToString(), FLinearColor(0.98f, 0.75f, 0.2f, 1.f),
 			X, Y + 24.f, GEngine->GetMediumFont(), 1.1f);
 		return;
 	}
@@ -504,7 +508,15 @@ void AShooterHUD::DrawAmmo(AShooterCharacter* Character)
 
 	if (Current <= 0)
 	{
-		DrawText(TEXT("PULSA R"), AccentLow, X + 140.f, Y + 34.f, GEngine->GetSmallFont(), 1.1f);
+		DrawText(LOCTEXT("PressReload", "PULSA R").ToString(), AccentLow, X + 140.f, Y + 34.f, GEngine->GetSmallFont(), 1.1f);
+	}
+
+	// Granadas restantes (RF-5.11).
+	const int32 Grenades = Character->GetGrenadeCount();
+	if (Grenades > 0)
+	{
+		DrawText(FString::Printf(TEXT("G x%d"), Grenades), TextMuted,
+			X + PanelWidth - 54.f, Y + 4.f, GEngine->GetSmallFont(), 1.1f);
 	}
 }
 
@@ -530,7 +542,7 @@ void AShooterHUD::DrawMatchInfo()
 
 	if (bTraining)
 	{
-		DrawText(TEXT("ENTRENAMIENTO"), TextPrimary,
+		DrawText(LOCTEXT("TrainingMode", "ENTRENAMIENTO").ToString(), TextPrimary,
 			PanelX + 24.f, 27.f, GEngine->GetMediumFont(), 1.1f);
 	}
 	else
@@ -555,7 +567,7 @@ void AShooterHUD::DrawMatchInfo()
 	{
 		const float BannerY = Canvas->ClipY * 0.35f;
 		DrawPanel(this, Canvas->ClipX * 0.5f - 190.f, BannerY - 14.f, 380.f, 56.f);
-		DrawText(TEXT("PARTIDA TERMINADA"), FLinearColor(1.f, 0.85f, 0.25f, 1.f),
+		DrawText(LOCTEXT("MatchOver", "PARTIDA TERMINADA").ToString(), FLinearColor(1.f, 0.85f, 0.25f, 1.f),
 			Canvas->ClipX * 0.5f - 150.f, BannerY, GEngine->GetLargeFont(), 1.6f);
 	}
 }
@@ -619,7 +631,7 @@ void AShooterHUD::DrawRespawnCountdown(AShooterPlayerController* Controller)
 	DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.35f), 0.f, 0.f, Canvas->ClipX, Canvas->ClipY);
 	DrawPanel(this, CenterX - 180.f, PanelY - 16.f, 360.f, 104.f);
 
-	DrawText(TEXT("ELIMINADO"), AccentLow, CenterX - 62.f, PanelY, GEngine->GetLargeFont(), 1.5f);
+	DrawText(LOCTEXT("Eliminated", "ELIMINADO").ToString(), AccentLow, CenterX - 62.f, PanelY, GEngine->GetLargeFont(), 1.5f);
 
 	// Quién te eliminó y con qué arma (RF-6.6).
 	const FString KillerName = Controller->GetLastKillerName();
@@ -636,3 +648,5 @@ void AShooterHUD::DrawRespawnCountdown(AShooterPlayerController* Controller)
 	DrawText(FString::Printf(TEXT("Reapareces en %d"), FMath::CeilToInt(Countdown)), TextMuted,
 		CenterX - 78.f, PanelY + 56.f, GEngine->GetMediumFont(), 1.2f);
 }
+
+#undef LOCTEXT_NAMESPACE

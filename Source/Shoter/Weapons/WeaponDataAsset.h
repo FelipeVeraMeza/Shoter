@@ -40,7 +40,7 @@ public:
 	float RoundsPerMinute = 600.f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Balance", meta = (ClampMin = "1"))
-	int32 MagazineSize = 30;
+	int32 MagazineSize = 24;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Balance", meta = (ClampMin = "0"))
 	int32 MaxReserveAmmo = 180;

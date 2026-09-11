@@ -59,7 +59,8 @@ void UHealthComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActo
 void UHealthComponent::HandleTakeAnyDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType,
 	AController* InstigatedBy, AActor* DamageCauser)
 {
-	if (Damage <= 0.f || bIsDead)
+	// La invulnerabilidad descarta el daño antes de tocar la salud (RF3).
+	if (Damage <= 0.f || bIsDead || bInvulnerable)
 	{
 		return;
 	}
@@ -80,5 +81,26 @@ void UHealthComponent::HandleTakeAnyDamage(AActor* DamagedActor, float Damage, c
 
 void UHealthComponent::OnRep_Health(float OldHealth)
 {
+	OnHealthChanged.Broadcast(Health, Health - OldHealth, nullptr);
+}
+
+void UHealthComponent::SetInvulnerable(bool bNewInvulnerable)
+{
+	bInvulnerable = bNewInvulnerable;
+}
+
+void UHealthComponent::ResetHealth()
+{
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		return;
+	}
+
+	const float OldHealth = Health;
+
+	Health = MaxHealth;
+	bIsDead = false;
+	LastDamageTime = -1000.f;
+
 	OnHealthChanged.Broadcast(Health, Health - OldHealth, nullptr);
 }

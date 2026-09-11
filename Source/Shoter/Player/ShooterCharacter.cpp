@@ -4,6 +4,9 @@
 #include "Combat/LagCompensationComponent.h"
 #include "Weapons/InventoryComponent.h"
 #include "Weapons/WeaponBase.h"
+#include "Weapons/ShooterGrenade.h"
+#include "Combat/TrainingRangeManager.h"
+#include "EngineUtils.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -54,6 +57,8 @@ void AShooterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 
 	DOREPLIFETIME_CONDITION(AShooterCharacter, bIsAiming, COND_SkipOwner);
 	DOREPLIFETIME_CONDITION(AShooterCharacter, bIsSprinting, COND_SkipOwner);
+	DOREPLIFETIME_CONDITION(AShooterCharacter, bIsSliding, COND_SkipOwner);
+	DOREPLIFETIME_CONDITION(AShooterCharacter, GrenadeCount, COND_OwnerOnly);
 }
 
 void AShooterCharacter::BeginPlay()
@@ -76,12 +81,15 @@ void AShooterCharacter::PossessedBy(AController* NewController)
 	if (HasAuthority() && Inventory)
 	{
 		Inventory->SpawnDefaultWeapons();
+		GrenadeCount = MaxGrenades;
 	}
 }
 
 void AShooterCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+
+	UpdateSlide(DeltaSeconds);
 
 	if (FirstPersonCamera && IsLocallyControlled())
 	{
@@ -184,6 +192,84 @@ void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	if (PauseAction)
 	{
 		Input->BindAction(PauseAction, ETriggerEvent::Started, this, &AShooterCharacter::TogglePauseMenu);
+	}
+
+	if (GrenadeAction)
+	{
+		Input->BindAction(GrenadeAction, ETriggerEvent::Started, this, &AShooterCharacter::ThrowGrenade);
+	}
+
+	if (ResetRangeAction)
+	{
+		Input->BindAction(ResetRangeAction, ETriggerEvent::Started, this, &AShooterCharacter::RequestRangeReset);
+	}
+}
+
+void AShooterCharacter::RequestRangeReset()
+{
+	// El gestor puede no existir fuera de la zona de entrenamiento.
+	for (TActorIterator<ATrainingRangeManager> It(GetWorld()); It; ++It)
+	{
+		if (ATrainingRangeManager* Manager = *It)
+		{
+			Manager->ResetRange();
+			return;
+		}
+	}
+}
+
+void AShooterCharacter::ThrowGrenade()
+{
+	const float Now = GetWorld()->GetTimeSeconds();
+
+	if (IsDead() || GrenadeCount <= 0 || (Now - LastGrenadeTime) < GrenadeCooldown)
+	{
+		return;
+	}
+
+	const UCameraComponent* Camera = GetFirstPersonCamera();
+	if (!Camera || !GrenadeClass)
+	{
+		return;
+	}
+
+	LastGrenadeTime = Now;
+
+	// Sale desde delante de la cámara, algo elevada: lanzar en arco es más
+	// útil que lanzar recto.
+	const FVector Origin = Camera->GetComponentLocation() + Camera->GetForwardVector() * 60.f;
+	const FVector Direction = (Camera->GetForwardVector() + FVector(0.f, 0.f, 0.25f)).GetSafeNormal();
+
+	Server_ThrowGrenade(Origin, Direction);
+}
+
+void AShooterCharacter::Server_ThrowGrenade_Implementation(
+	const FVector_NetQuantize& Origin, const FVector_NetQuantizeNormal& Direction)
+{
+	if (GrenadeCount <= 0 || !GrenadeClass || IsDead())
+	{
+		return;
+	}
+
+	// El servidor valida que el lanzamiento parta de donde el jugador está.
+	if (FVector::DistSquared(Origin, GetActorLocation()) > FMath::Square(350.f))
+	{
+		return;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.Owner = this;
+	SpawnParams.Instigator = this;
+	SpawnParams.SpawnCollisionHandlingOverride =
+		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+	AShooterGrenade* Grenade = GetWorld()->SpawnActor<AShooterGrenade>(
+		GrenadeClass, Origin, Direction.Rotation(), SpawnParams);
+
+	if (Grenade)
+	{
+		Grenade->Launch(Direction);
+		--GrenadeCount;
 	}
 }
 
@@ -365,6 +451,13 @@ void AShooterCharacter::ToggleCrouch()
 		return;
 	}
 
+	// Agacharse en plena carrera desliza en vez de frenar en seco (RF-4.6).
+	if (bIsSprinting && !bIsSliding && !GetCharacterMovement()->IsFalling())
+	{
+		StartSlide();
+		return;
+	}
+
 	if (bIsCrouched)
 	{
 		UnCrouch();
@@ -372,6 +465,102 @@ void AShooterCharacter::ToggleCrouch()
 	else
 	{
 		Crouch();
+	}
+}
+
+void AShooterCharacter::StartSlide()
+{
+	const float Now = GetWorld()->GetTimeSeconds();
+
+	// El enfriamiento evita encadenar deslizamientos como forma de correr.
+	if (bIsSliding || (Now - LastSlideEndTime) < SlideCooldown)
+	{
+		return;
+	}
+
+	bIsSliding = true;
+	SlideTimeRemaining = SlideDuration;
+
+	Crouch();
+
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	if (Movement)
+	{
+		// El impulso va en la dirección de avance, no la de la mirada: mirar
+		// hacia atrás a mitad de deslizamiento no debe frenarlo.
+		const FVector SlideDirection = GetVelocity().GetSafeNormal2D().IsNearlyZero()
+			? GetActorForwardVector()
+			: GetVelocity().GetSafeNormal2D();
+
+		Movement->MaxWalkSpeedCrouched = SlideSpeed;
+		Movement->Velocity = SlideDirection * SlideSpeed;
+	}
+
+	if (!HasAuthority())
+	{
+		Server_SetSliding(true);
+	}
+}
+
+void AShooterCharacter::StopSlide()
+{
+	if (!bIsSliding)
+	{
+		return;
+	}
+
+	bIsSliding = false;
+	SlideTimeRemaining = 0.f;
+	LastSlideEndTime = GetWorld()->GetTimeSeconds();
+
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		Movement->MaxWalkSpeedCrouched = CrouchSpeed;
+	}
+
+	UnCrouch();
+
+	if (!HasAuthority())
+	{
+		Server_SetSliding(false);
+	}
+}
+
+void AShooterCharacter::UpdateSlide(float DeltaSeconds)
+{
+	if (!bIsSliding)
+	{
+		return;
+	}
+
+	SlideTimeRemaining -= DeltaSeconds;
+
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+
+	// Termina al agotarse el tiempo, al saltar o al frenarse por rozamiento.
+	const bool bTooSlow = Movement && Movement->Velocity.Size2D() < CrouchSpeed;
+	if (SlideTimeRemaining <= 0.f || bTooSlow || (Movement && Movement->IsFalling()))
+	{
+		StopSlide();
+		return;
+	}
+
+	// Deceleración progresiva: el deslizamiento pierde fuerza hacia el final.
+	if (Movement)
+	{
+		const float Alpha = FMath::Clamp(SlideTimeRemaining / FMath::Max(SlideDuration, 0.01f), 0.f, 1.f);
+		const float TargetSpeed = FMath::Lerp(CrouchSpeed, SlideSpeed, Alpha);
+		Movement->Velocity = Movement->Velocity.GetSafeNormal2D() * TargetSpeed;
+	}
+}
+
+void AShooterCharacter::Server_SetSliding_Implementation(bool bNewSliding)
+{
+	bIsSliding = bNewSliding;
+
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		Movement->MaxWalkSpeedCrouched = bNewSliding ? SlideSpeed : CrouchSpeed;
 	}
 }
 

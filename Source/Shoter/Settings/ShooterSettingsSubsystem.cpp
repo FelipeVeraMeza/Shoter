@@ -3,6 +3,9 @@
 #include "Progression/ShooterSaveGame.h"
 #include "GameFramework/GameUserSettings.h"
 #include "Engine/GameInstance.h"
+#include "Sound/SoundClass.h"
+#include "Sound/SoundMix.h"
+#include "Kismet/GameplayStatics.h"
 
 void UShooterSettingsSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -16,6 +19,35 @@ void UShooterSettingsSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		Settings->LoadSettings();
 		Settings->ApplySettings(false);
 	}
+
+	ApplyAllVolumes();
+}
+
+void UShooterSettingsSubsystem::ApplyVolumeToClass(
+	const TSoftObjectPtr<USoundClass>& SoundClass, float Volume)
+{
+	// Sin mezcla ni clase asignadas el valor solo se guarda: es lo esperado
+	// mientras el proyecto no tenga assets de audio.
+	USoundMix* Mix = MainSoundMix.LoadSynchronous();
+	USoundClass* Class = SoundClass.LoadSynchronous();
+
+	if (!Mix || !Class)
+	{
+		return;
+	}
+
+	UGameplayStatics::SetSoundMixClassOverride(
+		GetGameInstance(), Mix, Class, Volume, 1.f, 0.1f, true);
+
+	UGameplayStatics::PushSoundMixModifier(GetGameInstance(), Mix);
+}
+
+void UShooterSettingsSubsystem::ApplyAllVolumes()
+{
+	ApplyVolumeToClass(MasterSoundClass, GetMasterVolume());
+	ApplyVolumeToClass(EffectsSoundClass, GetEffectsVolume());
+	ApplyVolumeToClass(MusicSoundClass, GetMusicVolume());
+	ApplyVolumeToClass(VoiceSoundClass, GetVoiceVolume());
 }
 
 UShooterProgressionSubsystem* UShooterSettingsSubsystem::GetProgression() const
@@ -222,6 +254,7 @@ void UShooterSettingsSubsystem::SetMasterVolume(float Value)
 	}
 
 	Save->MasterVolume = FMath::Clamp(Value, 0.f, 1.f);
+	ApplyVolumeToClass(MasterSoundClass, Save->MasterVolume);
 	SaveProfile();
 }
 
@@ -243,6 +276,7 @@ void UShooterSettingsSubsystem::SetEffectsVolume(float Value)
 	}
 
 	Save->EffectsVolume = FMath::Clamp(Value, 0.f, 1.f);
+	ApplyVolumeToClass(EffectsSoundClass, Save->EffectsVolume);
 	SaveProfile();
 }
 
@@ -264,6 +298,7 @@ void UShooterSettingsSubsystem::SetMusicVolume(float Value)
 	}
 
 	Save->MusicVolume = FMath::Clamp(Value, 0.f, 1.f);
+	ApplyVolumeToClass(MusicSoundClass, Save->MusicVolume);
 	SaveProfile();
 }
 
@@ -285,6 +320,7 @@ void UShooterSettingsSubsystem::SetVoiceVolume(float Value)
 	}
 
 	Save->VoiceVolume = FMath::Clamp(Value, 0.f, 1.f);
+	ApplyVolumeToClass(VoiceSoundClass, Save->VoiceVolume);
 	SaveProfile();
 }
 
@@ -340,5 +376,6 @@ void UShooterSettingsSubsystem::ApplyAndSave()
 		Settings->SaveSettings();
 	}
 
+	ApplyAllVolumes();
 	SaveProfile();
 }

@@ -5,6 +5,8 @@
 #include "ShooterSettingsSubsystem.generated.h"
 
 class UShooterProgressionSubsystem;
+class USoundMix;
+class USoundClass;
 
 UENUM(BlueprintType)
 enum class EShooterWindowMode : uint8
@@ -21,7 +23,7 @@ enum class EShooterWindowMode : uint8
  * los de juego (sensibilidad, volúmenes, mira) viven en el perfil guardado
  * para que persistan entre sesiones (RF-11.9).
  */
-UCLASS()
+UCLASS(Config = Game)
 class SHOTER_API UShooterSettingsSubsystem : public UGameInstanceSubsystem
 {
 	GENERATED_BODY()
@@ -124,8 +126,34 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Ajustes")
 	void ApplyAndSave();
 
+	/**
+	 * Mezcla y clases de sonido a las que enrutar los volúmenes (RNF3).
+	 * Sin ellas los valores se guardan pero no afectan al audio; se asignan
+	 * desde la configuración del proyecto cuando existan los assets.
+	 */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Audio")
+	TSoftObjectPtr<USoundMix> MainSoundMix;
+
+	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Audio")
+	TSoftObjectPtr<USoundClass> MasterSoundClass;
+
+	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Audio")
+	TSoftObjectPtr<USoundClass> EffectsSoundClass;
+
+	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Audio")
+	TSoftObjectPtr<USoundClass> MusicSoundClass;
+
+	UPROPERTY(Config, EditAnywhere, BlueprintReadWrite, Category = "Audio")
+	TSoftObjectPtr<USoundClass> VoiceSoundClass;
+
 private:
 	UShooterProgressionSubsystem* GetProgression() const;
+
+	/** Envía el volumen guardado a su Sound Class (RNF3). */
+	void ApplyVolumeToClass(const TSoftObjectPtr<USoundClass>& SoundClass, float Volume);
+
+	/** Reenvía los cuatro canales; se llama al arrancar y al cambiar uno. */
+	void ApplyAllVolumes();
 
 	/** Guarda el perfil sin tocar los ajustes de vídeo. */
 	void SaveProfile();

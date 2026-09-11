@@ -59,6 +59,23 @@ void AWeaponBase::SetOwningCharacter(AShooterCharacter* InCharacter)
 	SetOwner(InCharacter);
 }
 
+void AWeaponBase::ResetAmmo()
+{
+	if (!HasAuthority() || !WeaponData)
+	{
+		return;
+	}
+
+	// Cancela también una recarga en curso: el reinicio debe ser instantáneo.
+	GetWorldTimerManager().ClearTimer(ReloadTimerHandle);
+
+	CurrentAmmo = WeaponData->MagazineSize;
+	ReserveAmmo = WeaponData->MaxReserveAmmo;
+	bIsReloading = false;
+	ConsecutiveShots = 0;
+	AccumulatedSpread = 0.f;
+}
+
 void AWeaponBase::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);

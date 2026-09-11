@@ -11,6 +11,7 @@ class ULagCompensationComponent;
 class AWeaponBase;
 class UInputAction;
 class UInputMappingContext;
+class AShooterGrenade;
 struct FInputActionValue;
 
 UCLASS()
@@ -56,6 +57,21 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Cámara")
 	float AimFOV = 65.f;
 
+	/** Velocidad inicial del deslizamiento (RF-4.6). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movimiento", meta = (ClampMin = "0.0"))
+	float SlideSpeed = 950.f;
+
+	/** Duración máxima del deslizamiento, en segundos. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movimiento", meta = (ClampMin = "0.1"))
+	float SlideDuration = 0.75f;
+
+	/** Segundos antes de poder volver a deslizarse. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movimiento", meta = (ClampMin = "0.0"))
+	float SlideCooldown = 1.2f;
+
+	UFUNCTION(BlueprintPure, Category = "Movimiento")
+	bool IsSliding() const { return bIsSliding; }
+
 	/**
 	 * Contextos y acciones de Enhanced Input. Se asignan en el Blueprint del
 	 * personaje: las teclas concretas viven en los assets, no en C++ (RF-11.2).
@@ -94,6 +110,27 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
 	TObjectPtr<UInputAction> PauseAction;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+	TObjectPtr<UInputAction> GrenadeAction;
+
+	/** Repone drones, munición y salud en la zona de entrenamiento (RF6). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+	TObjectPtr<UInputAction> ResetRangeAction;
+
+	/** Granada que lanza el personaje (RF-5.11). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Granadas")
+	TSubclassOf<AShooterGrenade> GrenadeClass;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Granadas", meta = (ClampMin = "0"))
+	int32 MaxGrenades = 2;
+
+	/** Segundos entre lanzamientos, para que no se encadenen. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Granadas", meta = (ClampMin = "0.0"))
+	float GrenadeCooldown = 1.f;
+
+	UFUNCTION(BlueprintPure, Category = "Granadas")
+	int32 GetGrenadeCount() const { return GrenadeCount; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
@@ -124,6 +161,17 @@ private:
 	UPROPERTY(Replicated)
 	bool bIsSprinting = false;
 
+	UPROPERTY(Replicated)
+	bool bIsSliding = false;
+
+	float SlideTimeRemaining = 0.f;
+	float LastSlideEndTime = -1000.f;
+
+	UPROPERTY(Replicated)
+	int32 GrenadeCount = 0;
+
+	float LastGrenadeTime = -1000.f;
+
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 
@@ -139,6 +187,21 @@ private:
 	void ToggleCrouch();
 	void TogglePauseMenu();
 
+	/** Agacharse mientras se corre desliza en vez de frenar (RF-4.6). */
+	void StartSlide();
+	void StopSlide();
+	void UpdateSlide(float DeltaSeconds);
+
+	/** Lanza una granada en la dirección de la mira (RF-5.11). */
+	void ThrowGrenade();
+
+	/** Pide al gestor de la zona que reinicie el escenario (RF6). */
+	void RequestRangeReset();
+
+	UFUNCTION(Server, Reliable)
+	void Server_ThrowGrenade(const FVector_NetQuantize& Origin,
+		const FVector_NetQuantizeNormal& Direction);
+
 	void UpdateMaxWalkSpeed();
 
 	/**
@@ -151,6 +214,9 @@ private:
 
 	UFUNCTION(Server, Reliable)
 	void Server_SetSprinting(bool bNewSprinting);
+
+	UFUNCTION(Server, Reliable)
+	void Server_SetSliding(bool bNewSliding);
 
 	UFUNCTION()
 	void HandleDeath(AActor* Victim, AController* Killer);
