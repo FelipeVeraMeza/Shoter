@@ -74,4 +74,12 @@ public:
 
 	UPROPERTY(BlueprintReadWrite, Category = "Ajustes")
 	bool bInvertY = false;
+
+	/**
+	 * Cultura elegida por el jugador ("es", "en"). Vacío significa "la del
+	 * sistema": así un perfil nuevo respeta el idioma de Steam o de Windows
+	 * en vez de imponer español (RNF-6.3).
+	 */
+	UPROPERTY(BlueprintReadWrite, Category = "Ajustes")
+	FString Language;
 };

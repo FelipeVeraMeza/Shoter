@@ -6,6 +6,8 @@
 #include "Sound/SoundClass.h"
 #include "Sound/SoundMix.h"
 #include "Kismet/GameplayStatics.h"
+#include "Internationalization/Internationalization.h"
+#include "Internationalization/Culture.h"
 
 void UShooterSettingsSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -21,6 +23,15 @@ void UShooterSettingsSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	}
 
 	ApplyAllVolumes();
+
+	// El idioma debe aplicarse al arrancar: el perfil ya está cargado por la
+	// dependencia de arriba, así que aquí ya se sabe cuál eligió el jugador.
+	const UShooterProgressionSubsystem* Progression = GetProgression();
+	const UShooterSaveGame* Save = Progression ? Progression->GetSaveData() : nullptr;
+	if (Save && !Save->Language.IsEmpty())
+	{
+		FInternationalization::Get().SetCurrentCulture(Save->Language);
+	}
 }
 
 void UShooterSettingsSubsystem::ApplyVolumeToClass(
@@ -54,6 +65,47 @@ UShooterProgressionSubsystem* UShooterSettingsSubsystem::GetProgression() const
 {
 	const UGameInstance* GameInstance = GetGameInstance();
 	return GameInstance ? GameInstance->GetSubsystem<UShooterProgressionSubsystem>() : nullptr;
+}
+
+FString UShooterSettingsSubsystem::GetLanguage() const
+{
+	const UShooterProgressionSubsystem* Progression = GetProgression();
+	const UShooterSaveGame* Save = Progression ? Progression->GetSaveData() : nullptr;
+
+	// Un perfil sin idioma elegido hereda el del sistema, que es lo que el
+	// jugador espera la primera vez que abre el juego (RNF-6.3).
+	if (!Save || Save->Language.IsEmpty())
+	{
+		return FInternationalization::Get().GetCurrentCulture()->GetTwoLetterISOLanguageName();
+	}
+
+	return Save->Language;
+}
+
+void UShooterSettingsSubsystem::SetLanguage(const FString& CultureCode)
+{
+	if (CultureCode.IsEmpty() || !GetAvailableLanguages().Contains(CultureCode))
+	{
+		return;
+	}
+
+	// SetCurrentCulture cambia formato de números y fechas además del idioma;
+	// es lo correcto para un cambio elegido por el jugador.
+	FInternationalization::Get().SetCurrentCulture(CultureCode);
+
+	UShooterProgressionSubsystem* Progression = GetProgression();
+	if (UShooterSaveGame* Save = Progression ? Progression->GetSaveData() : nullptr)
+	{
+		Save->Language = CultureCode;
+		SaveProfile();
+	}
+}
+
+TArray<FString> UShooterSettingsSubsystem::GetAvailableLanguages() const
+{
+	// Fijas en v1.0 (RNF-6.2). Cuando haya más culturas conviene leerlas de
+	// las que el paquete traiga compiladas en vez de mantener esta lista.
+	return { TEXT("es"), TEXT("en") };
 }
 
 void UShooterSettingsSubsystem::SaveProfile()

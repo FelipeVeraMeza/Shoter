@@ -122,6 +122,26 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Ajustes|Accesibilidad")
 	void SetCrosshairColor(FLinearColor Color);
 
+	// --- Idioma (RNF-6.2, RNF-6.3) ---
+
+	/** Código de cultura activo ("es", "en"). */
+	UFUNCTION(BlueprintPure, Category = "Ajustes|Idioma")
+	FString GetLanguage() const;
+
+	/**
+	 * Cambia el idioma y lo persiste.
+	 *
+	 * Afecta a todo texto que pase por FText, así que el HUD se traduce sin
+	 * reiniciar. Los valores ya formateados en pantalla se redibujan al
+	 * siguiente frame porque el HUD por Canvas se repinta cada uno.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Ajustes|Idioma")
+	void SetLanguage(const FString& CultureCode);
+
+	/** Culturas disponibles, para poblar el desplegable del menú. */
+	UFUNCTION(BlueprintPure, Category = "Ajustes|Idioma")
+	TArray<FString> GetAvailableLanguages() const;
+
 	/** Escribe ajustes de vídeo y perfil (RF-11.9). */
 	UFUNCTION(BlueprintCallable, Category = "Ajustes")
 	void ApplyAndSave();

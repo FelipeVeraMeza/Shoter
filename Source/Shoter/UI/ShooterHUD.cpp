@@ -109,14 +109,28 @@ namespace
 		return Players;
 	}
 
-	FString TeamName(EShooterTeam Team)
+	FText TeamName(EShooterTeam Team)
 	{
 		switch (Team)
 		{
-		case EShooterTeam::Alpha: return TEXT("ALFA");
-		case EShooterTeam::Bravo: return TEXT("BRAVO");
-		default: return TEXT("-");
+		case EShooterTeam::Alpha: return LOCTEXT("TeamAlpha", "ALFA");
+		case EShooterTeam::Bravo: return LOCTEXT("TeamBravo", "BRAVO");
+		default: return LOCTEXT("TeamNone", "-");
 		}
+	}
+
+	/**
+	 * Nombre para mostrar de un jugador sin nombre propio.
+	 *
+	 * El índice se pasa como argumento con nombre en vez de concatenarse: hay
+	 * idiomas que anteponen el número al sustantivo, y solo el traductor puede
+	 * decidir ese orden (RNF-6.1).
+	 */
+	FText FallbackPlayerName(int32 Index)
+	{
+		FFormatNamedArguments Args;
+		Args.Add(TEXT("Number"), FText::AsNumber(Index));
+		return FText::Format(LOCTEXT("UnnamedPlayer", "Jugador {Number}"), Args);
 	}
 }
 
@@ -149,35 +163,50 @@ void AShooterHUD::DrawScoreboard()
 	const bool bTeamMode = ShooterGameState->GetTeamScore(EShooterTeam::Alpha) > 0
 		|| ShooterGameState->GetTeamScore(EShooterTeam::Bravo) > 0;
 
-	FString ResultText;
+	FText ResultText;
 	if (bTeamMode)
 	{
 		const EShooterTeam Winner = ShooterGameState->GetWinningTeam();
-		ResultText = (Winner == EShooterTeam::None)
-			? FString(TEXT("EMPATE"))
-			: FString::Printf(TEXT("GANA EQUIPO %s"), *TeamName(Winner));
+		if (Winner == EShooterTeam::None)
+		{
+			ResultText = LOCTEXT("ResultDraw", "EMPATE");
+		}
+		else
+		{
+			FFormatNamedArguments Args;
+			Args.Add(TEXT("Team"), TeamName(Winner));
+			ResultText = FText::Format(LOCTEXT("ResultTeamWins", "GANA EQUIPO {Team}"), Args);
+		}
 
-		DrawText(FString::Printf(TEXT("%d  -  %d"),
-			ShooterGameState->GetTeamScore(EShooterTeam::Alpha),
-			ShooterGameState->GetTeamScore(EShooterTeam::Bravo)),
+		FFormatNamedArguments ScoreArgs;
+		ScoreArgs.Add(TEXT("Alpha"), FText::AsNumber(ShooterGameState->GetTeamScore(EShooterTeam::Alpha)));
+		ScoreArgs.Add(TEXT("Bravo"), FText::AsNumber(ShooterGameState->GetTeamScore(EShooterTeam::Bravo)));
+		DrawText(FText::Format(LOCTEXT("TeamScoreLine", "{Alpha}  -  {Bravo}"), ScoreArgs).ToString(),
 			TextMuted, X + Width - 130.f, Y + 58.f, GEngine->GetMediumFont(), 1.3f);
 	}
 	else if (Players.Num() > 0)
 	{
-		const FString Name = Players[0]->GetPlayerName().IsEmpty()
-			? FString(TEXT("Jugador 1"))
-			: Players[0]->GetPlayerName();
-		ResultText = FString::Printf(TEXT("GANA %s"), *Name);
+		const FText Name = Players[0]->GetPlayerName().IsEmpty()
+			? FallbackPlayerName(1)
+			: FText::FromString(Players[0]->GetPlayerName());
 
-		DrawText(FString::Printf(TEXT("%d bajas"), Players[0]->GetKills()),
+		FFormatNamedArguments Args;
+		Args.Add(TEXT("Player"), Name);
+		ResultText = FText::Format(LOCTEXT("ResultPlayerWins", "GANA {Player}"), Args);
+
+		// Plural gestionado por el motor: hay idiomas con más de dos formas,
+		// así que la concordancia no puede resolverse concatenando en código.
+		DrawText(FText::Format(
+			LOCTEXT("KillCount", "{Kills} {Kills}|plural(one=baja,other=bajas)"),
+			FFormatNamedArguments{ { TEXT("Kills"), FText::AsNumber(Players[0]->GetKills()) } }).ToString(),
 			TextMuted, X + Width - 130.f, Y + 58.f, GEngine->GetMediumFont(), 1.3f);
 	}
 	else
 	{
-		ResultText = TEXT("SIN RESULTADO");
+		ResultText = LOCTEXT("ResultNone", "SIN RESULTADO");
 	}
 
-	DrawText(ResultText, TextPrimary, X + 28.f, Y + 58.f, GEngine->GetMediumFont(), 1.3f);
+	DrawText(ResultText.ToString(), TextPrimary, X + 28.f, Y + 58.f, GEngine->GetMediumFont(), 1.3f);
 
 	DrawColumns(X, Y + HeaderHeight - 26.f, Width);
 	DrawPlayerRows(Players, X, Y + HeaderHeight, Width, RowHeight);
@@ -248,10 +277,16 @@ void AShooterHUD::DrawKillFeed()
 		const bool bInvolved = !LocalName.IsEmpty()
 			&& (Event.KillerName == LocalName || Event.VictimName == LocalName);
 
-		FString Line = Event.WeaponName.IsEmpty()
-			? FString::Printf(TEXT("%s  ->  %s"), *Event.KillerName, *Event.VictimName)
-			: FString::Printf(TEXT("%s  [%s]  %s"),
-				*Event.KillerName, *Event.WeaponName, *Event.VictimName);
+		// El orden verdugo/víctima se deja al traductor: no todos los idiomas
+		// leen de izquierda a derecha ni ponen el sujeto primero.
+		FFormatNamedArguments LineArgs;
+		LineArgs.Add(TEXT("Killer"), FText::FromString(Event.KillerName));
+		LineArgs.Add(TEXT("Victim"), FText::FromString(Event.VictimName));
+		LineArgs.Add(TEXT("Weapon"), FText::FromString(Event.WeaponName));
+
+		const FString Line = Event.WeaponName.IsEmpty()
+			? FText::Format(LOCTEXT("KillFeedNoWeapon", "{Killer}  ->  {Victim}"), LineArgs).ToString()
+			: FText::Format(LOCTEXT("KillFeedWeapon", "{Killer}  [{Weapon}]  {Victim}"), LineArgs).ToString();
 
 		// Ancho aproximado: la fuente pequeña ocupa unos 7 px por carácter.
 		const float Width = Line.Len() * 7.4f + 24.f;
@@ -309,17 +344,19 @@ void AShooterHUD::DrawPlayerRows(const TArray<const AShooterPlayerState*>& Playe
 
 		const FLinearColor RowColor = bIsLocal ? FLinearColor(0.65f, 0.85f, 1.f, 1.f) : TextPrimary;
 		const FString Name = Player->GetPlayerName().IsEmpty()
-			? FString::Printf(TEXT("Jugador %d"), Index + 1)
+			? FallbackPlayerName(Index + 1).ToString()
 			: Player->GetPlayerName();
 
-		DrawText(FString::Printf(TEXT("%d."), Index + 1), TextMuted,
+		// Los números se formatean con FText::AsNumber porque el separador de
+		// millares depende de la configuración regional.
+		DrawText(FText::AsNumber(Index + 1).ToString() + TEXT("."), TextMuted,
 			X + 28.f, RowY + 4.f, GEngine->GetSmallFont(), 1.1f);
 		DrawText(Name, RowColor, X + 58.f, RowY + 4.f, GEngine->GetSmallFont(), 1.2f);
-		DrawText(TeamName(Player->GetTeam()), TextMuted,
+		DrawText(TeamName(Player->GetTeam()).ToString(), TextMuted,
 			X + Width - 250.f, RowY + 4.f, GEngine->GetSmallFont(), 1.1f);
-		DrawText(FString::Printf(TEXT("%d"), Player->GetKills()), RowColor,
+		DrawText(FText::AsNumber(Player->GetKills()).ToString(), RowColor,
 			X + Width - 150.f, RowY + 4.f, GEngine->GetSmallFont(), 1.2f);
-		DrawText(FString::Printf(TEXT("%d"), Player->GetDeaths()), TextMuted,
+		DrawText(FText::AsNumber(Player->GetDeaths()).ToString(), TextMuted,
 			X + Width - 74.f, RowY + 4.f, GEngine->GetSmallFont(), 1.2f);
 	}
 }
@@ -457,7 +494,7 @@ void AShooterHUD::DrawHealth(AShooterCharacter* Character)
 		DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.35f), MarkX, Y, 1.f, BarHeight);
 	}
 
-	DrawText(FString::Printf(TEXT("%d"), Points), TextPrimary,
+	DrawText(FText::AsNumber(Points).ToString(), TextPrimary,
 		X + BarWidth + 16.f, Y - 10.f, GEngine->GetLargeFont(), 1.2f);
 }
 
@@ -479,7 +516,7 @@ void AShooterHUD::DrawAmmo(AShooterCharacter* Character)
 	const UWeaponDataAsset* Data = Weapon->WeaponData;
 	const FString WeaponName = (Data && !Data->DisplayName.IsEmpty())
 		? Data->DisplayName.ToString()
-		: FString(TEXT("ARMA"));
+		: LOCTEXT("WeaponFallback", "ARMA").ToString();
 	DrawText(WeaponName.ToUpper(), TextMuted, X, Y, GEngine->GetSmallFont(), 1.f);
 
 	if (Weapon->IsReloading())
@@ -499,12 +536,13 @@ void AShooterHUD::DrawAmmo(AShooterCharacter* Character)
 		? TextPrimary
 		: (Current > 0 ? FLinearColor(0.98f, 0.75f, 0.2f, 1.f) : AccentLow);
 
-	DrawText(FString::Printf(TEXT("%d"), Current), CurrentColor,
+	DrawText(FText::AsNumber(Current).ToString(), CurrentColor,
 		X, Y + 18.f, GEngine->GetLargeFont(), 1.6f);
 
 	const float CurrentWidth = Current >= 10 ? 46.f : 26.f;
-	DrawText(FString::Printf(TEXT("/ %d"), Reserve), TextMuted,
-		X + CurrentWidth, Y + 36.f, GEngine->GetMediumFont(), 1.f);
+	DrawText(FText::Format(LOCTEXT("AmmoReserve", "/ {Reserve}"),
+		FFormatNamedArguments{ { TEXT("Reserve"), FText::AsNumber(Reserve) } }).ToString(),
+		TextMuted, X + CurrentWidth, Y + 36.f, GEngine->GetMediumFont(), 1.f);
 
 	if (Current <= 0)
 	{
@@ -515,8 +553,10 @@ void AShooterHUD::DrawAmmo(AShooterCharacter* Character)
 	const int32 Grenades = Character->GetGrenadeCount();
 	if (Grenades > 0)
 	{
-		DrawText(FString::Printf(TEXT("G x%d"), Grenades), TextMuted,
-			X + PanelWidth - 54.f, Y + 4.f, GEngine->GetSmallFont(), 1.1f);
+		// La "G" es la inicial de granada: el traductor necesita poder cambiarla.
+		DrawText(FText::Format(LOCTEXT("GrenadeCount", "G x{Count}"),
+			FFormatNamedArguments{ { TEXT("Count"), FText::AsNumber(Grenades) } }).ToString(),
+			TextMuted, X + PanelWidth - 54.f, Y + 4.f, GEngine->GetSmallFont(), 1.1f);
 	}
 }
 
@@ -557,10 +597,11 @@ void AShooterHUD::DrawMatchInfo()
 
 		DrawText(TimeText, TimeColor, PanelX + 32.f, 24.f, GEngine->GetLargeFont(), 1.3f);
 
-		const FString ScoreText = FString::Printf(TEXT("%d  -  %d"),
-			ShooterGameState->GetTeamScore(EShooterTeam::Alpha),
-			ShooterGameState->GetTeamScore(EShooterTeam::Bravo));
-		DrawText(ScoreText, TextMuted, PanelX + 32.f, 52.f, GEngine->GetSmallFont(), 1.1f);
+		FFormatNamedArguments ScoreArgs;
+		ScoreArgs.Add(TEXT("Alpha"), FText::AsNumber(ShooterGameState->GetTeamScore(EShooterTeam::Alpha)));
+		ScoreArgs.Add(TEXT("Bravo"), FText::AsNumber(ShooterGameState->GetTeamScore(EShooterTeam::Bravo)));
+		DrawText(FText::Format(LOCTEXT("TeamScoreLive", "{Alpha}  -  {Bravo}"), ScoreArgs).ToString(),
+			TextMuted, PanelX + 32.f, 52.f, GEngine->GetSmallFont(), 1.1f);
 	}
 
 	if (ShooterGameState->GetMatchPhase() == EMatchPhase::Finished)
@@ -638,15 +679,22 @@ void AShooterHUD::DrawRespawnCountdown(AShooterPlayerController* Controller)
 	if (!KillerName.IsEmpty())
 	{
 		const FString Weapon = Controller->GetLastKillerWeapon();
-		const FString Text = Weapon.IsEmpty()
-			? FString::Printf(TEXT("Te eliminó %s"), *KillerName)
-			: FString::Printf(TEXT("Te eliminó %s con %s"), *KillerName, *Weapon);
 
-		DrawText(Text, TextPrimary, CenterX - 120.f, PanelY + 34.f, GEngine->GetSmallFont(), 1.2f);
+		FFormatNamedArguments Args;
+		Args.Add(TEXT("Killer"), FText::FromString(KillerName));
+		Args.Add(TEXT("Weapon"), FText::FromString(Weapon));
+
+		const FText Text = Weapon.IsEmpty()
+			? FText::Format(LOCTEXT("KilledBy", "Te eliminó {Killer}"), Args)
+			: FText::Format(LOCTEXT("KilledByWeapon", "Te eliminó {Killer} con {Weapon}"), Args);
+
+		DrawText(Text.ToString(), TextPrimary, CenterX - 120.f, PanelY + 34.f, GEngine->GetSmallFont(), 1.2f);
 	}
 
-	DrawText(FString::Printf(TEXT("Reapareces en %d"), FMath::CeilToInt(Countdown)), TextMuted,
-		CenterX - 78.f, PanelY + 56.f, GEngine->GetMediumFont(), 1.2f);
+	FFormatNamedArguments CountdownArgs;
+	CountdownArgs.Add(TEXT("Seconds"), FText::AsNumber(FMath::CeilToInt(Countdown)));
+	DrawText(FText::Format(LOCTEXT("RespawnIn", "Reapareces en {Seconds}"), CountdownArgs).ToString(),
+		TextMuted, CenterX - 78.f, PanelY + 56.f, GEngine->GetMediumFont(), 1.2f);
 }
 
 #undef LOCTEXT_NAMESPACE
