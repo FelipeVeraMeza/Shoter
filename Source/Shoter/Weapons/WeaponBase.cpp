@@ -395,6 +395,13 @@ bool AWeaponBase::Server_Fire_Validate(const FVector_NetQuantize& TraceStart, co
 
 void AWeaponBase::Server_Fire_Implementation(const FVector_NetQuantize& TraceStart, const FVector_NetQuantizeNormal& ShotDirection)
 {
+	// Descarte silencioso: contestar al cliente que excedió el límite le diría
+	// dónde está el umbral (RNF-3.5).
+	if (!FireRateLimiter.AllowCall(GetWorld()->GetTimeSeconds()))
+	{
+		return;
+	}
+
 	if (!WeaponData || !OwningCharacter || OwningCharacter->IsDead() || bIsReloading)
 	{
 		return;

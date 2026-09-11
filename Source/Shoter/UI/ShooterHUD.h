@@ -44,6 +44,9 @@ private:
 
 	/** Oleada actual y enemigos restantes (RF-8.4). */
 	void DrawWaveInfo();
+
+	/** Aviso de conexión perdida, en lenguaje claro (RNF-2.6, RNF-4.6). */
+	void DrawConnectionWarning(AShooterPlayerController* Controller);
 	void DrawDamageIndicator(AShooterCharacter* Character, AShooterPlayerController* Controller);
 	void DrawRespawnCountdown(AShooterPlayerController* Controller);
 

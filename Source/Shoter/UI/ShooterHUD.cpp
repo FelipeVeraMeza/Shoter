@@ -61,6 +61,7 @@ void AShooterHUD::DrawHUD()
 	DrawKillFeed();
 	DrawControlZones();
 	DrawWaveInfo();
+	DrawConnectionWarning(ShooterPC);
 
 	if (ShooterPC)
 	{
@@ -627,6 +628,36 @@ void AShooterHUD::DrawControlZones()
 		DrawText(Zone->ZoneLabel, TextPrimary, X + BoxSize * 0.5f - 6.f, Y + 14.f,
 			GEngine->GetMediumFont(), 1.3f);
 	}
+}
+
+void AShooterHUD::DrawConnectionWarning(AShooterPlayerController* Controller)
+{
+	if (!Controller || !Controller->IsConnectionLost())
+	{
+		return;
+	}
+
+	const float PanelWidth = 420.f;
+	const float X = (Canvas->ClipX - PanelWidth) * 0.5f;
+	const float Y = Canvas->ClipY * 0.24f;
+
+	// Fondo rojo sólido: el aviso debe leerse sobre cualquier escena.
+	DrawRect(FLinearColor(0.35f, 0.03f, 0.03f, 0.9f), X, Y, PanelWidth, 64.f);
+
+	DrawText(LOCTEXT("ConnectionLost", "SE PERDIÓ LA CONEXIÓN").ToString(),
+		FLinearColor(1.f, 0.92f, 0.92f, 1.f),
+		X + 20.f, Y + 10.f, GEngine->GetMediumFont(), 1.3f);
+
+	// Mensaje sin códigos técnicos, como exige RNF-4.6.
+	FFormatNamedArguments Args;
+	Args.Add(TEXT("Seconds"),
+		FText::AsNumber(FMath::FloorToInt(Controller->GetSecondsSinceServerResponse())));
+
+	DrawText(FText::Format(
+		LOCTEXT("ConnectionLostDetail", "Sin respuesta del servidor desde hace {Seconds} s"),
+		Args).ToString(),
+		FLinearColor(1.f, 0.8f, 0.8f, 1.f),
+		X + 20.f, Y + 38.f, GEngine->GetSmallFont(), 1.1f);
 }
 
 void AShooterHUD::DrawWaveInfo()

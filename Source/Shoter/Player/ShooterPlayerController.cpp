@@ -2,7 +2,16 @@
 #include "Core/ShooterGameMode.h"
 #include "Progression/ShooterProgressionSubsystem.h"
 #include "Engine/GameInstance.h"
+#include "Engine/NetConnection.h"
+#include "Engine/NetDriver.h"
 #include "Net/UnrealNetwork.h"
+
+AShooterPlayerController::AShooterPlayerController()
+{
+	// Explícito: la vigilancia del enlace (RNF-2.6) depende del Tick, y no
+	// conviene que quede a merced del valor por defecto de la clase base.
+	PrimaryActorTick.bCanEverTick = true;
+}
 
 void AShooterPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
@@ -80,4 +89,56 @@ void AShooterPlayerController::OnCharacterDied(AController* Killer)
 	{
 		GameMode->OnPlayerKilled(this, Killer);
 	}
+}
+
+void AShooterPlayerController::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	// Solo el cliente detecta la caída: en el servidor no hay enlace que vigilar.
+	if (HasAuthority() || !IsLocalController())
+	{
+		return;
+	}
+
+	const UNetConnection* Connection = GetNetConnection();
+	if (!Connection)
+	{
+		return;
+	}
+
+	// LastReceiveTime avanza con cualquier paquete entrante, así que sirve de
+	// prueba de vida sin enviar tráfico adicional (RNF-2.3).
+	LastServerResponseTime = Connection->LastReceiveTime;
+}
+
+float AShooterPlayerController::GetSecondsSinceServerResponse() const
+{
+	const UNetConnection* Connection = GetNetConnection();
+	if (!Connection)
+	{
+		return 0.f;
+	}
+
+	const UWorld* World = GetWorld();
+	if (!World || !World->GetNetDriver())
+	{
+		return 0.f;
+	}
+
+	// El tiempo del driver de red es el mismo reloj en que se anota
+	// LastReceiveTime; usar el del mundo daría una diferencia sin sentido.
+	return FMath::Max(
+		World->GetNetDriver()->GetElapsedTime() - Connection->LastReceiveTime, 0.f);
+}
+
+bool AShooterPlayerController::IsConnectionLost() const
+{
+	// Una partida local no tiene conexión que perder.
+	if (HasAuthority() || !GetNetConnection())
+	{
+		return false;
+	}
+
+	return GetSecondsSinceServerResponse() > DisconnectWarningSeconds;
 }

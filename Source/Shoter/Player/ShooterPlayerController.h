@@ -10,6 +10,8 @@ class SHOTER_API AShooterPlayerController : public APlayerController
 	GENERATED_BODY()
 
 public:
+	AShooterPlayerController();
+
 	/** Confirmación de impacto para el atacante: solo llega a quien disparó. */
 	UFUNCTION(Client, Reliable)
 	void Client_NotifyHitConfirmed(bool bHeadshot);
@@ -52,7 +54,37 @@ public:
 
 	void SetRespawnTime(float WorldTimeToRespawn) { RespawnWorldTime = WorldTimeToRespawn; }
 
+	// --- Detección de desconexión (RNF-2.6) ---
+
+	/**
+	 * Segundos sin recibir nada del servidor.
+	 *
+	 * Se mide contra la última actualización de red recibida, no con un ping
+	 * propio: cualquier tráfico del servidor sirve como prueba de vida, así que
+	 * no hace falta añadir paquetes para detectar la caída.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Red")
+	float GetSecondsSinceServerResponse() const;
+
+	/** True cuando el enlace lleva caído más de DisconnectWarningSeconds. */
+	UFUNCTION(BlueprintPure, Category = "Red")
+	bool IsConnectionLost() const;
+
+	/**
+	 * Umbral del aviso, por debajo de los 10 s que exige RNF-2.6.
+	 *
+	 * Tres segundos bastan para descartar un pico de latencia normal sin
+	 * agotar el presupuesto del requerimiento.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Red", meta = (ClampMin = "1.0", ClampMax = "9.0"))
+	float DisconnectWarningSeconds = 3.f;
+
+	virtual void Tick(float DeltaSeconds) override;
+
 private:
+	/** Momento del mundo en que se recibió la última señal del servidor. */
+	float LastServerResponseTime = 0.f;
+
 	float LastHitConfirmedTime = -1000.f;
 	bool bLastHitWasHeadshot = false;
 

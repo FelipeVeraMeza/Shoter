@@ -246,6 +246,11 @@ void AShooterCharacter::ThrowGrenade()
 void AShooterCharacter::Server_ThrowGrenade_Implementation(
 	const FVector_NetQuantize& Origin, const FVector_NetQuantizeNormal& Direction)
 {
+	if (!GrenadeRateLimiter.AllowCall(GetWorld()->GetTimeSeconds()))
+	{
+		return;
+	}
+
 	if (GrenadeCount <= 0 || !GrenadeClass || IsDead())
 	{
 		return;
@@ -401,6 +406,11 @@ void AShooterCharacter::StopAiming()
 
 void AShooterCharacter::Server_SetAiming_Implementation(bool bNewAiming)
 {
+	if (!StateRateLimiter.AllowCall(GetWorld()->GetTimeSeconds()))
+	{
+		return;
+	}
+
 	bIsAiming = bNewAiming;
 }
 
@@ -436,6 +446,11 @@ void AShooterCharacter::StopSprinting()
 
 void AShooterCharacter::Server_SetSprinting_Implementation(bool bNewSprinting)
 {
+	if (!StateRateLimiter.AllowCall(GetWorld()->GetTimeSeconds()))
+	{
+		return;
+	}
+
 	bIsSprinting = bNewSprinting;
 	if (bNewSprinting)
 	{
@@ -556,6 +571,11 @@ void AShooterCharacter::UpdateSlide(float DeltaSeconds)
 
 void AShooterCharacter::Server_SetSliding_Implementation(bool bNewSliding)
 {
+	if (!StateRateLimiter.AllowCall(GetWorld()->GetTimeSeconds()))
+	{
+		return;
+	}
+
 	bIsSliding = bNewSliding;
 
 	if (UCharacterMovementComponent* Movement = GetCharacterMovement())

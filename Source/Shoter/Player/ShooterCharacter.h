@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "Core/RPCRateLimiter.h"
 #include "ShooterCharacter.generated.h"
 
 class UCameraComponent;
@@ -217,6 +218,18 @@ private:
 
 	UFUNCTION(Server, Reliable)
 	void Server_SetSliding(bool bNewSliding);
+
+	/**
+	 * Limita las RPC de estado (apuntar, correr, deslizarse) y la granada
+	 * (RNF-3.5).
+	 *
+	 * Comparten limitador porque el ataque que importa es la suma: alternar
+	 * entre ellas eludiría un contador por RPC. El de estado es generoso
+	 * porque alternar apuntado es legítimo y frecuente; el de granada, estricto,
+	 * porque su cadencia real es de una cada pocos segundos.
+	 */
+	FRPCRateLimiter StateRateLimiter{ 40, 1.f };
+	FRPCRateLimiter GrenadeRateLimiter{ 5, 1.f };
 
 	UFUNCTION()
 	void HandleDeath(AActor* Victim, AController* Killer);

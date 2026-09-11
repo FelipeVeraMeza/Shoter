@@ -4,6 +4,7 @@
 #include "GameFramework/Actor.h"
 #include "ShooterTypes.h"
 #include "Weapons/WeaponAttachmentDataAsset.h"
+#include "Core/RPCRateLimiter.h"
 #include "WeaponBase.generated.h"
 
 class UWeaponDataAsset;
@@ -106,6 +107,15 @@ private:
 
 	UPROPERTY(Replicated)
 	bool bIsReloading = false;
+
+	/**
+	 * Frena a un cliente que invoque Server_Fire en bucle (RNF-3.5).
+	 *
+	 * El margen sobre la cadencia real es amplio a propósito: con pérdida de
+	 * paquetes las RPC fiables llegan agrupadas, y un límite ajustado
+	 * penalizaría a un jugador con mala conexión en vez de a un tramposo.
+	 */
+	FRPCRateLimiter FireRateLimiter{ 30, 1.f };
 
 	bool bWantsToFire = false;
 	float LastFireTime = -1000.f;
