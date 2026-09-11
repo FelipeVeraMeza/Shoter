@@ -17,7 +17,9 @@ public class Shoter : ModuleRules
 			"Engine",
 			"InputCore",
 			"EnhancedInput",
-			"Niagara"
+			"Niagara",
+			// Menús y HUD en widgets (RF-2).
+			"UMG"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]

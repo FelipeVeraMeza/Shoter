@@ -90,6 +90,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
 	TObjectPtr<UInputAction> SwitchWeaponAction;
 
+	/** Abre el menú de pausa (RF-3.4). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+	TObjectPtr<UInputAction> PauseAction;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
@@ -133,6 +137,7 @@ private:
 	void StartSprinting();
 	void StopSprinting();
 	void ToggleCrouch();
+	void TogglePauseMenu();
 
 	void UpdateMaxWalkSpeed();
 

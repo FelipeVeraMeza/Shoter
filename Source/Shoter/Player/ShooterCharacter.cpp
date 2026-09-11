@@ -12,6 +12,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "Settings/ShooterSettingsSubsystem.h"
+#include "UI/ShooterMenuSubsystem.h"
 #include "Engine/GameInstance.h"
 #include "Net/UnrealNetwork.h"
 
@@ -178,6 +179,22 @@ void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	if (CrouchAction)
 	{
 		Input->BindAction(CrouchAction, ETriggerEvent::Started, this, &AShooterCharacter::ToggleCrouch);
+	}
+
+	if (PauseAction)
+	{
+		Input->BindAction(PauseAction, ETriggerEvent::Started, this, &AShooterCharacter::TogglePauseMenu);
+	}
+}
+
+void AShooterCharacter::TogglePauseMenu()
+{
+	if (const UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (UShooterMenuSubsystem* Menu = GameInstance->GetSubsystem<UShooterMenuSubsystem>())
+		{
+			Menu->TogglePause();
+		}
 	}
 }
 

@@ -18,10 +18,10 @@ contra el código del proyecto.
 
 | Prioridad | Total | ✅ | 🔶 | ❌ / 🔒 |
 |---|---:|---:|---:|---:|
-| 🔴 Must | 58 | 38 | 1 | 19 |
-| 🟡 Should | 30 | 8 | 1 | 21 |
+| 🔴 Must | 58 | 40 | 3 | 15 |
+| 🟡 Should | 30 | 9 | 1 | 20 |
 | 🟢 Could | 12 | 0 | 0 | 12 |
-| **RF total** | **100** | **46** | **2** | **52** |
+| **RF total** | **100** | **49** | **4** | **47** |
 | **RNF total** | **52** | **13** | **6** | **33** |
 
 El núcleo de combate está completo. Lo que falta se concentra en: cuenta y
@@ -45,10 +45,10 @@ administración.
 
 | ID | Pri | Estado | Dónde / por qué |
 |---|:--:|:--:|---|
-| RF-2.1 Menú principal | 🔴 | ❌ | Sin UMG todavía; el HUD es Canvas |
-| RF-2.2 Elegir modo | 🔴 | ❌ | Depende de RF-2.1 |
-| RF-2.3 Ver nivel y XP | 🟡 | ❌ | Depende de progresión (RF-9) |
-| RF-2.4 Salir del juego | 🔴 | ❌ | Depende de RF-2.1 |
+| RF-2.1 Menú principal | 🔴 | 🔶 | `ShooterMenuSubsystem` navega entre 6 pantallas; faltan los widgets visuales |
+| RF-2.2 Elegir modo | 🔴 | 🔶 | `StartMatch(LevelName)` listo; falta la pantalla que lo llame |
+| RF-2.3 Ver nivel y XP | 🟡 | ✅ | `GetProgressSummary` y `GetStatsSummary` en `ShooterMenuWidget` |
+| RF-2.4 Salir del juego | 🔴 | ✅ | `QuitGame`, cierre ordenado del proceso |
 
 ## 3. Matchmaking y partidas
 
@@ -57,7 +57,7 @@ administración.
 | RF-3.1 Buscar partida pública | 🔴 | 🔒 | Requiere EOS o Steam Sessions |
 | RF-3.2 Emparejar por región | 🔴 | 🔒 | Idem |
 | RF-3.3 Cancelar búsqueda | 🔴 | 🔒 | Idem |
-| RF-3.4 Abandonar partida | 🔴 | ❌ | Depende del menú |
+| RF-3.4 Abandonar partida | 🔴 | ✅ | `LeaveMatch` vuelve al nivel de menú |
 | RF-3.5 Reconexión | 🟡 | 🔒 | Requiere servidor dedicado |
 | RF-3.6 Bots de relleno | 🟡 | ❌ | Sin IA todavía |
 | RF-3.7 Equilibrar equipos | 🟡 | 🔶 | `ChooseTeamForNewPlayer` reparte al entrar; falta reequilibrio ante abandonos |
@@ -252,11 +252,13 @@ infraestructura previstas en las fases F2–F4 de
 
 Por orden de coste y dependencias:
 
-1. **RF-8.6 pantalla de resultados** y **RF-8.1 todos contra todos** — cierran
-   el bloque de modos, sin dependencias
-2. **RF-7.7 killfeed** y **RF-7.8 tabla de posiciones** — los datos ya existen
-   en `ShooterPlayerState`
-3. **RF-11 configuración** — `UGameUserSettings` cubre gráficos, y las teclas
-   ya son reasignables; falta la UI
-4. **RF-9 progresión local** — `USaveGame` permite cumplir RF-9.1 a RF-9.5 sin
-   backend, aunque RNF-3.4 quede pendiente
+Los bloques accesibles por código están hechos. Lo que queda no es
+programación:
+
+1. **Widgets del menú** — la lógica está completa en `ShooterMenuSubsystem` y
+   `ShooterMenuWidget`; falta colocar botones en UMG, que es trabajo de diseño
+   en el editor
+2. **Sound Classes** — los volúmenes se guardan pero no enrutan a nada hasta
+   que existan los assets de audio
+3. **Localización (RNF-6)** — mover los textos del HUD a tablas
+4. **Bots (RF-3.6, RF-8.4)** — requiere árboles de comportamiento

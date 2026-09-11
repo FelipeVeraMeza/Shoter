@@ -151,3 +151,56 @@ El servidor decide el daño; los clientes solo reproducen el efecto (RNF-3.1).
 | Paleta de daltonismo | Requiere post-proceso o materiales de HUD |
 | Telemetría → backend | Dependencia externa |
 | Progreso en servidor | RNF-3.4, dependencia externa |
+
+---
+
+## Menú — `UShooterMenuSubsystem` y `UShooterMenuWidget`
+
+La navegación vive en C++; los widgets solo componen (RNF-9.2).
+
+**Cubre:** RF-2.1, RF-2.2, RF-2.3, RF-2.4, RF-3.4
+
+### Pantallas
+
+`EShooterMenuScreen` define seis: `Main`, `Play`, `Arsenal`, `Progression`,
+`Options`, `Pause`. El subsistema mantiene una pila de navegación, así que
+`GoBack` vuelve a la anterior sin que el widget lleve la cuenta.
+
+```cpp
+UShooterMenuSubsystem* Menu =
+    GetGameInstance()->GetSubsystem<UShooterMenuSubsystem>();
+
+Menu->OpenScreen(EShooterMenuScreen::Options);
+Menu->GoBack();
+Menu->TogglePause();                       // Escape en partida
+Menu->StartMatch(TEXT("Lvl_Entrenamiento"));
+```
+
+### Para montar un widget
+
+1. Ejecutar `Content/Python/build_menu.py`: crea los seis `WBP_*` derivados de
+   `ShooterMenuWidget`, y el nivel `Lvl_Menu`
+2. Abrir cada widget, colocar botones y enlazar su *OnClicked* a las funciones
+   heredadas: `OpenScreen`, `GoBack`, `StartMatch`, `QuitGame`, `LeaveMatch`
+3. `Project Settings → Game → Shooter Menu Subsystem → Screen Widgets`:
+   asignar cada widget a su pantalla
+
+El paso 2 es diseño visual: los widgets de UMG son assets binarios que se
+construyen arrastrando elementos, no por código.
+
+### Datos listos para mostrar
+
+```cpp
+int32 Level, CurrentXP, RequiredXP;
+GetProgressSummary(Level, CurrentXP, RequiredXP);   // barra de XP (RF-2.3)
+
+GetStatsSummary();   // "K/D 1.42 · Precisión 34 % · 27 partidas"
+GetPlayerName();
+SetPlayerName(FText::FromString(TEXT("Felipe")));   // RF-1.3
+```
+
+### Modo de entrada
+
+Con el menú abierto se usa `FInputModeGameAndUI` y cursor visible. El juego
+**no se pausa**: un FPS multijugador no puede detenerse porque un jugador abra
+las opciones.
