@@ -8,8 +8,11 @@
 
 namespace
 {
+	// Prefijada con el nombre de la clase: el unity build de Unreal fusiona
+	// varios .cpp en una unidad de traducción, y un nombre genérico en un
+	// namespace anónimo colisiona con el de otro archivo del mismo módulo.
 	/** Duración del destello al recibir un impacto, en segundos. */
-	constexpr float HitFlashDuration = 0.1f;
+	constexpr float DroneHitFlashDuration = 0.1f;
 }
 
 ATrainingDrone::ATrainingDrone()
@@ -129,7 +132,7 @@ float ATrainingDrone::TakeDamage(float DamageAmount, FDamageEvent const& DamageE
 
 void ATrainingDrone::Multicast_PlayHitEffects_Implementation(const FVector_NetQuantize& ImpactLocation)
 {
-	HitFlashRemaining = HitFlashDuration;
+	HitFlashRemaining = DroneHitFlashDuration;
 	UpdateVisuals();
 
 	// Chispas en el punto de impacto (RF2).
@@ -207,7 +210,7 @@ void ATrainingDrone::UpdateVisuals()
 	// Destello blanco tras el impacto: confirma el acierto al instante.
 	if (HitFlashRemaining > 0.f)
 	{
-		const float Alpha = HitFlashRemaining / HitFlashDuration;
+		const float Alpha = HitFlashRemaining / DroneHitFlashDuration;
 		Color = FMath::Lerp(Color, FLinearColor::White, Alpha);
 	}
 

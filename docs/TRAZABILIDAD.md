@@ -19,14 +19,18 @@ contra el código del proyecto.
 | Prioridad | Total | ✅ | 🔶 | ❌ / 🔒 |
 |---|---:|---:|---:|---:|
 | 🔴 Must | 58 | 40 | 3 | 15 |
-| 🟡 Should | 30 | 9 | 1 | 20 |
-| 🟢 Could | 12 | 0 | 0 | 12 |
-| **RF total** | **100** | **49** | **4** | **47** |
+| 🟡 Should | 30 | 13 | 1 | 16 |
+| 🟢 Could | 12 | 1 | 0 | 11 |
+| **RF total** | **100** | **54** | **4** | **42** |
 | **RNF total** | **52** | **13** | **6** | **33** |
 
 El núcleo de combate está completo. Lo que falta se concentra en: cuenta y
 sesión, menús, matchmaking, progresión, configuración y herramientas de
 administración.
+
+> Actualizado tras los commits `5df6c9b` y `120facc`, que añadieron bots,
+> granadas, deslizamiento y la zona de entrenamiento con drones. Las cinco
+> filas que cambiaron son RF-1.5, RF-3.6, RF-4.6, RF-5.11 y RF-8.4.
 
 ---
 
@@ -38,7 +42,7 @@ administración.
 | RF-1.2 Perfil persistente | 🔴 | 🔒 | Depende de RF-1.1 |
 | RF-1.3 Nombre visible | 🔴 | ✅ | `ShooterProgressionSubsystem::SetPlayerName`, persistido |
 | RF-1.4 Recuperar progreso | 🔴 | 🔒 | Depende del backend de progresión |
-| RF-1.5 Jugar sin conexión | 🟡 | ❌ | Sin bots todavía |
+| RF-1.5 Jugar sin conexión | 🟡 | ✅ | `ShooterGameMode::FillWithBots` permite partida local contra IA |
 | RF-1.6 Aviso de fallo online | 🔴 | ❌ | Sin capa online que pueda fallar |
 
 ## 2. Menú y navegación
@@ -59,7 +63,7 @@ administración.
 | RF-3.3 Cancelar búsqueda | 🔴 | 🔒 | Idem |
 | RF-3.4 Abandonar partida | 🔴 | ✅ | `LeaveMatch` vuelve al nivel de menú |
 | RF-3.5 Reconexión | 🟡 | 🔒 | Requiere servidor dedicado |
-| RF-3.6 Bots de relleno | 🟡 | ❌ | Sin IA todavía |
+| RF-3.6 Bots de relleno | 🟡 | ✅ | `FillWithBots` con `DesiredBotCount` y `BotFillDelay` |
 | RF-3.7 Equilibrar equipos | 🟡 | 🔶 | `ChooseTeamForNewPlayer` reparte al entrar; falta reequilibrio ante abandonos |
 | RF-3.8 Partida privada | 🟢 | 🔒 | Requiere sesiones |
 | RF-3.9 Configurar sala | 🟢 | 🔒 | Idem |
@@ -73,7 +77,7 @@ administración.
 | RF-4.3 Saltar | 🔴 | ✅ | `JumpAction` → `ACharacter::Jump` |
 | RF-4.4 Agacharse | 🔴 | ✅ | `ShooterCharacter::ToggleCrouch` |
 | RF-4.5 Correr sin disparar | 🔴 | ✅ | `StartSprinting` llama a `StopFire` |
-| RF-4.6 Deslizarse | 🟡 | ❌ | No implementado |
+| RF-4.6 Deslizarse | 🟡 | ✅ | `StartSlide`/`UpdateSlide`, con duración y enfriamiento |
 | RF-4.7 Colisión | 🔴 | ✅ | `UCapsuleComponent` del personaje |
 
 ## 5. Armas y combate ✅
@@ -90,7 +94,7 @@ administración.
 | RF-5.8 Caída de daño | 🔴 | ✅ | `WeaponDataAsset::GetDamageAtDistance` |
 | RF-5.9 Headshot | 🔴 | ✅ | `LagCompensationComponent` con `HeadshotHeightFraction` |
 | RF-5.10 Accesorios | 🟡 | ❌ | No implementado |
-| RF-5.11 Granadas | 🟢 | ❌ | No implementado |
+| RF-5.11 Granadas | 🟢 | ✅ | `AShooterGrenade`: daño radial, mecha de 3 s, validado en servidor |
 
 ## 6. Salud, muerte y reaparición ✅
 
@@ -125,7 +129,7 @@ administración.
 | RF-8.1 Todos contra todos | 🔴 | ✅ | `bTeamBased = false`; el ganador sale de la tabla |
 | RF-8.2 Equipos 4v4 | 🔴 | ✅ | `bTeamBased` con reparto automático |
 | RF-8.3 Dominación | 🟡 | ❌ | No implementado |
-| RF-8.4 Oleadas | 🟢 | ❌ | Requiere IA |
+| RF-8.4 Oleadas | 🟢 | 🔶 | La IA ya existe (`ShooterBotController`); falta la lógica de oleadas |
 | RF-8.5 Fin de partida | 🔴 | ✅ | `FinishMatch` por tiempo o `CheckWinCondition` |
 | RF-8.6 Pantalla de resultados | 🔴 | ✅ | `DrawScoreboard` con posiciones, bajas y muertes |
 
@@ -252,13 +256,15 @@ infraestructura previstas en las fases F2–F4 de
 
 Por orden de coste y dependencias:
 
-Los bloques accesibles por código están hechos. Lo que queda no es
-programación:
+Los bloques accesibles por código están casi todos hechos. Lo que queda:
 
 1. **Widgets del menú** — la lógica está completa en `ShooterMenuSubsystem` y
    `ShooterMenuWidget`; falta colocar botones en UMG, que es trabajo de diseño
    en el editor
 2. **Sound Classes** — los volúmenes se guardan pero no enrutan a nada hasta
    que existan los assets de audio
-3. **Localización (RNF-6)** — mover los textos del HUD a tablas
-4. **Bots (RF-3.6, RF-8.4)** — requiere árboles de comportamiento
+3. **Localización (RNF-6)** — mover los textos del HUD a tablas. Es el mayor
+   bloque pendiente que sí es programación y no depende de nada externo
+4. **Modo Dominación (RF-8.3)** — zonas de captura sobre el GameMode existente
+5. **Modo Oleadas (RF-8.4)** — la IA ya está; falta la progresión de oleadas
+6. **Accesorios de arma (RF-5.10, RF-9.4)** — extiende `WeaponDataAsset`

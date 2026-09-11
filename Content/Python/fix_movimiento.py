@@ -94,6 +94,11 @@ def run():
         return
 
     # --- 1. El tipo de la acción ---
+    #
+    # Ésta es la causa más probable del bug. build_training_zone.py crea las
+    # acciones de COMBAT_ACTIONS como BOOLEAN; si IA_Move pasó por ahí en vez
+    # de venir de la plantilla First Person, Get<FVector2D>() recibe un bool
+    # convertido, que es (1,0) para cualquier tecla: las cuatro mueven de lado.
     try:
         value_type = move.get_editor_property("value_type")
         log("IA_Move.value_type = {}".format(value_type))
@@ -102,9 +107,10 @@ def run():
             move.set_editor_property(
                 "value_type", unreal.InputActionValueType.AXIS2D)
             unreal.EditorAssetLibrary.save_loaded_asset(move)
-            log("CORREGIDO: IA_Move pasa a Axis2D")
+            log("CORREGIDO: IA_Move era {}, pasa a Axis2D".format(value_type))
+            log("  -> ÉSTA ERA LA CAUSA DEL BUG")
         else:
-            log("IA_Move ya era Axis2D")
+            log("IA_Move ya era Axis2D: la causa es otra, revisa los modificadores")
     except Exception as error:
         log("AVISO: no se pudo revisar el tipo: {}".format(error))
 
@@ -172,6 +178,9 @@ def run():
         container.get_editor_property(inner))
 
     log("--- comprobación ---")
+    log("IA_Move.value_type final = {}".format(
+        move.get_editor_property("value_type")))
+
     for mapping in written:
         if mapping.get_editor_property("action") != move:
             continue
@@ -179,6 +188,12 @@ def run():
         mods = mapping.get_editor_property("modifiers")
         log("  {:4} {} modificadores".format(
             str(key.key_name), len(mods) if mods else 0))
+
+    # Si el tipo de la acción cambió, los mapeos guardados antes pueden
+    # conservar el valor cacheado. Forzar una segunda escritura del contexto
+    # garantiza que lo que quedó en disco corresponde al tipo actual.
+    unreal.EditorAssetLibrary.save_loaded_asset(context)
+    unreal.EditorAssetLibrary.save_loaded_asset(move)
 
     # --- 4. Recompilar el personaje ---
     player_bp = unreal.EditorAssetLibrary.load_asset(BP_JUGADOR)

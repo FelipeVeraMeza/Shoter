@@ -165,7 +165,9 @@ exista.
 |---|---|
 | `diagnostico.py` | Vuelca la API real del motor a `Saved/diagnostico_api.txt`. **Ejecutar esto primero ante cualquier fallo de script** |
 | `build_training_zone.py` | Crea los assets del juego y el nivel de entrenamiento |
+| `build_sci_fi_range.py` | Hangar futurista con paneles luminosos |
 | `build_menu.py` | Crea los seis widgets del menú y `Lvl_Menu` |
+| `fix_movimiento.py` | Corrige el tipo de `IA_Move` y los modificadores de WASD |
 | `fix_blueprints.py` | Reasigna valores a los Blueprints **y los recompila** |
 | `fix_camara.py` | Mapea ratón y teclado en `IMC_Combate` |
 | `fix_arma.py` | Asigna malla y nombre a `DA_Rifle` |
@@ -173,9 +175,40 @@ exista.
 
 ---
 
+---
+
+## Fase 4 — Bots, granadas, deslizamiento y drones
+
+Commits `5df6c9b` y `120facc`. Cinco requerimientos más cubiertos: RF-1.5,
+RF-3.6, RF-4.6, RF-5.11 y la mitad de RF-8.4.
+
+| Sistema | Clase | Requerimientos |
+|---|---|---|
+| IA de combate | `AShooterBotController` | RF-3.6, RF-1.5 |
+| Granadas | `AShooterGrenade` | RF-5.11 |
+| Deslizamiento | `ShooterCharacter::StartSlide` | RF-4.6 |
+| Drones de entrenamiento | `ATrainingDrone`, `ATrainingRangeManager` | RNF-4.1 |
+
+### Decisiones
+
+**Los bots usan percepción por `UAIPerceptionComponent`, no árbol de
+comportamiento.** Un FPS arcade necesita reacción rápida y previsible, no
+planificación: un `Tick` con máquina de estados (patrulla / combate) es más
+fácil de depurar y más barato con ocho bots en partida.
+
+**La granada valida en el servidor.** El cliente pide el lanzamiento con
+`Server_ThrowGrenade`; el daño radial se calcula solo en el servidor y la
+explosión se reproduce por multicast (RNF-3.1, RNF-3.2).
+
+**El deslizamiento reutiliza `MaxWalkSpeedCrouched`** en vez de un modo de
+movimiento propio: menos código y replicación gratuita por el
+`CharacterMovementComponent`.
+
+---
+
 ## Estado al cierre
 
-**49 de 100 requerimientos funcionales, 40 de 58 Must.** Detalle en
+**54 de 100 requerimientos funcionales, 40 de 58 Must.** Detalle en
 [TRAZABILIDAD.md](TRAZABILIDAD.md).
 
 ### Lo que queda bloqueado
@@ -196,7 +229,23 @@ escribiendo código del cliente:
   botones en UMG, que es trabajo de editor
 - **Sound Classes**: los volúmenes se guardan pero no enrutan a nada
 - **Localización (RNF-6)**: los textos del HUD están en código, no en tablas
-- **Bots (RF-3.6, RF-8.4)**: requiere árboles de comportamiento
+- **Modos Dominación y Oleadas** (RF-8.3, RF-8.4)
+- **Accesorios de arma** (RF-5.10, RF-9.4)
+
+### Bug abierto: movimiento WASD
+
+El personaje se mueve siempre en la misma dirección con cualquier tecla.
+
+**Causa probable, hallada al auditar el código:** `build_training_zone.py`
+crea las acciones de `COMBAT_ACTIONS` con `value_type = BOOLEAN`, y asume que
+`IA_Move` viene de la plantilla First Person —si no existe, solo deja un aviso
+y continúa—. Si `IA_Move` se creó por esa vía quedó como booleano, y
+`Get<FVector2D>()` convierte un `bool` en `(1, 0)`: las cuatro teclas producen
+el mismo desplazamiento lateral.
+
+`fix_movimiento.py` comprueba el tipo, lo corrige a `Axis2D`, reconstruye los
+modificadores de las cuatro teclas y vuelve a guardar el contexto. **Pendiente
+de ejecutar y verificar en el editor.**
 
 ---
 
