@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Plataforma de Envíos — Especificación y Cuestionario</title>
+<style>
+  @page {
+    size: A4;
+    margin: 20mm 16mm 18mm 16mm;
+    @bottom-center {
+      content: "Plataforma de Envíos · Especificación v1.0 · página " counter(page) " de " counter(pages);
+      font-family: "DejaVu Sans", sans-serif; font-size: 7.5pt; color: #7a8290;
+    }
+  }
+  @page :first { margin: 0; @bottom-center { content: ""; } }
+
+  :root {
+    --tinta: #16202e;
+    --suave: #5a6675;
+    --acento: #1d5fd8;
+    --acento2: #0e8a63;
+    --rojo: #c0392b;
+    --ambar: #b9770e;
+    --linea: #dde3ea;
+    --fondo: #f5f7fa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "DejaVu Sans", "Liberation Sans", sans-serif;
+    font-size: 9.6pt; line-height: 1.5; color: var(--tinta); margin: 0;
+  }
+
+  /* ---------- Portada ---------- */
+  .portada {
+    height: 297mm; padding: 45mm 22mm 20mm 22mm;
+    background: linear-gradient(160deg, #10243f 0%, #1d5fd8 100%);
+    color: #fff; page-break-after: always;
+  }
+  .portada .eyebrow { font-size: 10pt; letter-spacing: 3px; text-transform: uppercase; opacity: .75; }
+  .portada h1 { font-size: 34pt; line-height: 1.12; margin: 14px 0 6px; font-weight: 700; }
+  .portada h2 { font-size: 14pt; font-weight: 400; opacity: .9; margin: 0 0 40px; }
+  .portada .meta { border-top: 1px solid rgba(255,255,255,.3); padding-top: 14px; font-size: 9.5pt; }
+  .portada .meta div { margin-bottom: 5px; }
+  .portada .nota {
+    margin-top: 36px; background: rgba(255,255,255,.12); border-left: 3px solid #fff;
+    padding: 12px 14px; font-size: 9pt; line-height: 1.55;
+  }
+
+  /* ---------- Tipografía ---------- */
+  h2.sec {
+    font-size: 15pt; color: var(--acento); margin: 26px 0 10px;
+    border-bottom: 2px solid var(--acento); padding-bottom: 5px;
+    page-break-after: avoid;
+  }
+  h3 { font-size: 11.5pt; margin: 18px 0 6px; color: #10243f; page-break-after: avoid; }
+  h4 { font-size: 10pt; margin: 13px 0 4px; color: #2c3a4b; page-break-after: avoid; }
+  p { margin: 6px 0; }
+  ul, ol { margin: 6px 0 6px 18px; padding: 0; }
+  li { margin-bottom: 3px; }
+  code { font-family: "DejaVu Sans Mono", monospace; font-size: 8.4pt; background: var(--fondo); padding: 1px 4px; border-radius: 3px; }
+
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 8.8pt; page-break-inside: avoid; }
+  th { background: #10243f; color: #fff; text-align: left; padding: 6px 7px; font-weight: 600; }
+  td { border-bottom: 1px solid var(--linea); padding: 5px 7px; vertical-align: top; }
+  tr:nth-child(even) td { background: #fafbfd; }
+  td.id { font-family: "DejaVu Sans Mono", monospace; font-size: 8pt; white-space: nowrap; color: var(--acento); }
+
+  .si { color: var(--acento2); font-weight: 700; }
+  .no { color: var(--rojo); font-weight: 700; }
+  .quizas { color: var(--ambar); font-weight: 700; }
+
+  .caja { background: var(--fondo); border-left: 4px solid var(--acento); padding: 10px 13px; margin: 12px 0; page-break-inside: avoid; }
+  .caja.alerta { border-left-color: var(--ambar); background: #fdf7ec; }
+  .caja.stop { border-left-color: var(--rojo); background: #fdf0ee; }
+  .caja .titulo { font-weight: 700; margin-bottom: 4px; font-size: 9.5pt; }
+
+  .indice { columns: 2; column-gap: 26px; font-size: 9.2pt; }
+  .indice div { margin-bottom: 4px; break-inside: avoid; }
+  .indice .n { color: var(--acento); font-weight: 700; display: inline-block; width: 22px; }
+
+  .preg { margin: 0 0 9px; page-break-inside: avoid; }
+  .preg .q { font-weight: 600; }
+  .preg .q .num { color: var(--acento); font-family: "DejaVu Sans Mono", monospace; font-size: 8.4pt; margin-right: 5px; }
+  .preg .opts { font-size: 8.6pt; color: var(--suave); margin: 2px 0 3px 22px; }
+  .linea-resp { border-bottom: 1px dotted #aab3bf; height: 13px; margin: 3px 0 0 22px; }
+  .linea-resp.doble { height: 26px; }
+
+  .flujo { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0; }
+  .paso {
+    background: #fff; border: 1.5px solid var(--acento); border-radius: 5px;
+    padding: 5px 9px; font-size: 8.4pt; font-weight: 600; color: var(--acento);
+  }
+  .paso .n { background: var(--acento); color: #fff; border-radius: 50%; padding: 0 5px; margin-right: 4px; font-size: 7.6pt; }
+
+  .pagebreak { page-break-before: always; }
+  .pill { display: inline-block; font-size: 7.6pt; font-weight: 700; padding: 1px 7px; border-radius: 9px; }
+  .pill.v1 { background: #d9f2e6; color: #0e6b4d; }
+  .pill.v2 { background: #e4ecfb; color: #17458f; }
+  .pill.fuera { background: #fbe3e0; color: #92281b; }
+  .firma { margin-top: 26px; display: flex; gap: 30px; }
+  .firma div { flex: 1; border-top: 1px solid #98a2af; padding-top: 5px; font-size: 8.4pt; color: var(--suave); }
+</style>
+</head>
+<body>
+
+<!-- ===================== PORTADA ===================== -->
+<div class="portada">
+  <div class="eyebrow">Documento de alcance · Propuesta técnica</div>
+  <h1>Plataforma de<br>Gestión de Envíos</h1>
+  <h2>Sesión · Dirección · Producto · Foto · Comuna · Ticket + QR ·<br>Navegación en mapas · Registro de envíos y ganancias</h2>
+
+  <div class="meta">
+    <div><b>Versión:</b> 1.0 (borrador para revisión del cliente)</div>
+    <div><b>Fecha:</b> 18 de septiembre de 2026</div>
+    <div><b>Estado:</b> Pendiente de validación — no es un contrato ni una cotización cerrada</div>
+    <div><b>Mercado objetivo:</b> Chile (direcciones y tarifas por comuna)</div>
+  </div>
+
+  <div class="nota">
+    <b>Cómo usar este documento.</b> Las secciones 1 a 12 describen <i>qué hace y qué no hace</i>
+    el sistema propuesto. La sección 13 es el <b>cuestionario para el cliente</b>: imprímela o
+    envíala tal cual, y con sus respuestas se cierra el alcance definitivo y recién ahí se
+    cotiza plazo y precio. Todo lo marcado <span style="background:rgba(255,255,255,.25);padding:0 4px;">[SUPUESTO]</span>
+    es una decisión que tomé por ti para poder avanzar: si el cliente responde distinto, cambia.
+  </div>
+</div>
+
+<!-- ===================== ÍNDICE ===================== -->
+<h2 class="sec">Índice</h2>
+<div class="indice">
+  <div><span class="n">1.</span> Resumen en una página</div>
+  <div><span class="n">2.</span> El flujo completo, paso a paso</div>
+  <div><span class="n">3.</span> Qué HACE el sistema</div>
+  <div><span class="n">4.</span> Qué NO hace el sistema</div>
+  <div><span class="n">5.</span> Módulos: detalle funcional</div>
+  <div><span class="n">6.</span> Requerimientos funcionales (RF)</div>
+  <div><span class="n">7.</span> Requerimientos no funcionales (RNF)</div>
+  <div><span class="n">8.</span> Modelo de datos</div>
+  <div><span class="n">9.</span> Arquitectura y tecnología propuesta</div>
+  <div><span class="n">10.</span> El QR y la apertura de mapas (lo más delicado)</div>
+  <div><span class="n">11.</span> Ganancias: cómo se calculan</div>
+  <div><span class="n">12.</span> Legal, privacidad y las fotos</div>
+  <div><span class="n">13.</span> <b>Cuestionario para el cliente</b></div>
+  <div><span class="n">14.</span> Qué necesito que el cliente entregue</div>
+  <div><span class="n">15.</span> Fases, esfuerzo y costos recurrentes</div>
+  <div><span class="n">16.</span> Riesgos y supuestos</div>
+  <div><span class="n">17.</span> Criterios de aceptación</div>
+  <div><span class="n">18.</span> Glosario</div>
+</div>
+
+<!-- ===================== 1 ===================== -->
+<h2 class="sec">1. Resumen en una página</h2>
+
+<p><b>Qué es.</b> Una aplicación web (que también se instala en el celular como app, sin pasar
+por las tiendas) donde una persona autorizada inicia sesión, carga un envío — cliente,
+dirección, comuna, producto, foto de evidencia — y el sistema emite un <b>ticket imprimible con
+un código QR</b>. Ese QR, al escanearse, abre la navegación en el mapa directamente hacia la
+dirección de destino, sin que nadie tenga que tipear la dirección a mano. Cada envío queda
+registrado y el sistema muestra cuánto se despachó y cuánto se ganó.</p>
+
+<p><b>El problema que resuelve.</b> Hoy la dirección se copia a mano al celular (errores de
+tipeo, tiempo perdido, direcciones ambiguas), la evidencia de la entrega se pierde en WhatsApp,
+y las ganancias se calculan en un cuaderno o en un Excel que nadie cuadra.</p>
+
+<table>
+  <tr><th style="width:30%">Pieza</th><th>Qué entrega</th></tr>
+  <tr><td><b>Login</b></td><td>Cada usuario entra con su cuenta; queda registro de quién creó cada envío.</td></tr>
+  <tr><td><b>Alta de envío</b></td><td>Cliente, dirección, comuna, producto, monto, observaciones.</td></tr>
+  <tr><td><b>Foto</b></td><td>Evidencia del paquete o de la entrega, tomada desde la cámara del celular.</td></tr>
+  <tr><td><b>Comuna</b></td><td>Determina la tarifa y la zona de reparto. Lista oficial de comunas de Chile.</td></tr>
+  <tr><td><b>Ticket + QR</b></td><td>Documento imprimible (térmico 80&nbsp;mm o A4) con los datos del envío y el QR.</td></tr>
+  <tr><td><b>QR → Mapa</b></td><td>Al escanearlo abre Google&nbsp;Maps / Waze con la dirección ya cargada y la ruta lista.</td></tr>
+  <tr><td><b>Registro</b></td><td>Historial de envíos con estados, filtros, búsqueda y exportación.</td></tr>
+  <tr><td><b>Ganancias</b></td><td>Totales por día / semana / mes / comuna / repartidor, con costos y neto.</td></tr>
+</table>
+
+<div class="caja alerta">
+  <div class="titulo">Lo que hay que decidir antes de programar una sola línea</div>
+  Hay <b>cinco</b> preguntas que cambian el proyecto entero, y están al inicio del cuestionario
+  (sección 13, bloque A): quién usa la app, si necesita funcionar sin internet, si el QR lo
+  escanea el repartidor o el cliente final, si hay que imprimir en papel de verdad, y si el
+  dinero que se registra es una tarifa fija por comuna o algo variable. Sin esas cinco, cualquier
+  plazo que te den es inventado.
+</div>
+
+<!-- ===================== 2 ===================== -->
+<h2 class="sec">2. El flujo completo, paso a paso</h2>
+
+<div class="flujo">
+  <span class="paso"><span class="n">1</span>Inicia sesión</span>
+  <span class="paso"><span class="n">2</span>Nuevo envío</span>
+  <span class="paso"><span class="n">3</span>Datos del destinatario</span>
+  <span class="paso"><span class="n">4</span>Dirección + comuna</span>
+  <span class="paso"><span class="n">5</span>Producto y monto</span>
+  <span class="paso"><span class="n">6</span>Validación</span>
+  <span class="paso"><span class="n">7</span>Foto</span>
+  <span class="paso"><span class="n">8</span>Confirmar</span>
+  <span class="paso"><span class="n">9</span>Ticket + QR</span>
+  <span class="paso"><span class="n">10</span>Escaneo → Mapa</span>
+  <span class="paso"><span class="n">11</span>Entrega y cierre</span>
+  <span class="paso"><span class="n">12</span>Registro y ganancias</span>
+</div>
+
+<h3>2.1 Detalle de cada paso</h3>
+<table>
+  <tr><th style="width:6%">#</th><th style="width:24%">Paso</th><th>Qué pasa exactamente</th></tr>
+  <tr><td class="id">1</td><td><b>Inicio de sesión</b></td><td>Correo + contraseña. La sesión queda abierta en el dispositivo (30 días) para que el repartidor no tenga que autenticarse en la calle. Botón de recuperación de contraseña.</td></tr>
+  <tr><td class="id">2</td><td><b>Nuevo envío</b></td><td>Botón grande en la pantalla principal. Se crea un borrador que se va guardando solo, para que no se pierda si se corta la app.</td></tr>
+  <tr><td class="id">3</td><td><b>Destinatario</b></td><td>Nombre, teléfono (formato chileno +56 9 XXXX XXXX), correo opcional. Si el destinatario ya existe, autocompleta.</td></tr>
+  <tr><td class="id">4</td><td><b>Dirección y comuna</b></td><td>Calle, número, depto/casa, referencia ("portón verde, tocar timbre 2"), comuna elegida de una lista oficial, región derivada de la comuna. <span class="pill v1">v1</span> Con autocompletado de direcciones si se contrata Google Places (ver §10).</td></tr>
+  <tr><td class="id">5</td><td><b>Producto y monto</b></td><td>Descripción, cantidad, peso o tamaño aproximado, valor declarado, tarifa de envío, forma de pago (pagado / paga al recibir), observaciones.</td></tr>
+  <tr><td class="id">6</td><td><b>Validación</b></td><td>El sistema revisa que no falte nada obligatorio, que el teléfono tenga formato válido y que la comuna esté dentro de la zona de cobertura. Si algo está mal, lo marca en rojo y no deja avanzar. <b>Recién cuando está todo OK habilita la cámara.</b></td></tr>
+  <tr><td class="id">7</td><td><b>Foto</b></td><td>Abre la cámara del celular, se toma la foto del paquete (o de la entrega), se puede repetir si salió mal, y se comprime antes de subir para no gastar datos. Queda asociada al envío con fecha, hora y usuario.</td></tr>
+  <tr><td class="id">8</td><td><b>Confirmación</b></td><td>Pantalla de resumen con todo lo cargado. Botón "Confirmar envío". Aquí se asigna el <b>folio</b> (número correlativo único, ej. <code>ENV-2026-004137</code>).</td></tr>
+  <tr><td class="id">9</td><td><b>Ticket + QR</b></td><td>Se genera el ticket con los datos y el QR. Se puede imprimir, descargar como PDF o compartir por WhatsApp.</td></tr>
+  <tr><td class="id">10</td><td><b>Escaneo</b></td><td>Se escanea el QR con la cámara del celular. Abre el mapa con la dirección cargada y la ruta lista para iniciar.</td></tr>
+  <tr><td class="id">11</td><td><b>Entrega</b></td><td>El repartidor marca el envío como entregado (o fallido, con motivo). Puede subir una segunda foto de constancia de entrega.</td></tr>
+  <tr><td class="id">12</td><td><b>Registro</b></td><td>El envío pasa al historial. Los montos entran a los totales de ganancias del día.</td></tr>
+</table>
+
+<div class="caja">
+  <div class="titulo">Sobre "cuando está todo OK le saca una foto"</div>
+  Lo entendí así: <b>la cámara se habilita recién cuando el formulario pasó la validación</b>, para
+  que nadie saque la foto de un envío incompleto. Es la interpretación más razonable y es la que está
+  especificada arriba. Si lo que querías es que la foto se pueda tomar en cualquier momento, es un
+  cambio de 10 minutos — pero hay que decirlo ahora. <b>Pregunta C-4 del cuestionario.</b>
+</div>
+
+<!-- ===================== 3 ===================== -->
+<h2 class="sec">3. Qué HACE el sistema</h2>
+<p>Esta es la lista que puedes mostrarle al cliente tal cual. Todo lo que está aquí está
+comprometido en la versión 1 salvo que diga <span class="pill v2">v2</span>.</p>
+
+<table>
+  <tr><th style="width:26%">Área</th><th>Lo que hace</th><th style="width:9%">Versión</th></tr>
+  <tr><td rowspan="4"><b>Cuentas y acceso</b></td><td>Iniciar sesión con correo y contraseña; recuperar contraseña por correo</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Tres roles con permisos distintos: administrador, operador y repartidor</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Mantener la sesión abierta en el celular sin volver a autenticarse cada vez</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Registro de quién hizo qué y cuándo (auditoría básica)</td><td><span class="pill v1">v1</span></td></tr>
+
+  <tr><td rowspan="4"><b>Direcciones</b></td><td>Guardar direcciones con calle, número, depto, referencia y comuna</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Libreta de direcciones reutilizable por destinatario frecuente</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Lista oficial de las 346 comunas de Chile, con su región y provincia</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Autocompletado y validación real de direcciones contra Google Places</td><td><span class="pill v2">opcional</span></td></tr>
+
+  <tr><td rowspan="3"><b>Productos y envío</b></td><td>Describir el producto, cantidad, peso/tamaño y valor declarado</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Catálogo de productos para no re-escribir los repetidos</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Varios productos en un mismo envío</td><td><span class="pill v1">v1</span></td></tr>
+
+  <tr><td rowspan="3"><b>Foto</b></td><td>Tomar la foto desde la cámara del celular dentro de la app</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Comprimir y subir la foto; repetirla si salió mal; verla después en el detalle</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Segunda foto de constancia al momento de entregar</td><td><span class="pill v1">v1</span></td></tr>
+
+  <tr><td rowspan="3"><b>Comuna y tarifa</b></td><td>Definir una tarifa por comuna desde el panel de administración</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Agrupar comunas en zonas (Zona 1, 2, 3) con tarifa por zona</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Bloquear comunas fuera de cobertura para que no se pueda crear el envío</td><td><span class="pill v1">v1</span></td></tr>
+
+  <tr><td rowspan="4"><b>Ticket</b></td><td>Generar un ticket con folio único, datos del envío, fecha y QR</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Formato boleta térmica 80&nbsp;mm y formato A4/etiqueta, ambos en PDF</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Imprimir desde el navegador o descargar el PDF y compartirlo por WhatsApp</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Logo y datos del negocio en el encabezado del ticket</td><td><span class="pill v1">v1</span></td></tr>
+
+  <tr><td rowspan="3"><b>QR y navegación</b></td><td>Generar un QR por envío que abre la navegación hacia la dirección</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Elegir el destino: Google Maps, Waze o preguntar cada vez</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Botón "Abrir en el mapa" dentro de la app, sin escanear nada</td><td><span class="pill v1">v1</span></td></tr>
+
+  <tr><td rowspan="5"><b>Registro de envíos</b></td><td>Historial completo con buscador por folio, nombre, teléfono o dirección</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Filtros por fecha, comuna, estado y repartidor</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Estados del envío con su historia (quién lo cambió y cuándo)</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Detalle del envío con foto, ticket y QR siempre recuperables</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Exportar a Excel/CSV lo que se está viendo en pantalla</td><td><span class="pill v1">v1</span></td></tr>
+
+  <tr><td rowspan="4"><b>Ganancias</b></td><td>Totales de envíos y de dinero por día, semana y mes</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Desglose por comuna, por repartidor y por estado</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Registro de costos (bencina, comisión del repartidor) y cálculo del neto</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Gráficos simples de evolución y ranking de comunas</td><td><span class="pill v1">v1</span></td></tr>
+
+  <tr><td rowspan="2"><b>Uso en la calle</b></td><td>Funciona en el celular como app instalable (PWA), sin tiendas de aplicaciones</td><td><span class="pill v1">v1</span></td></tr>
+  <tr><td>Crea envíos sin señal y los sincroniza cuando vuelve la conexión</td><td><span class="pill v2">a definir</span></td></tr>
+</table>
+
+<!-- ===================== 4 ===================== -->
+<h2 class="sec">4. Qué NO hace el sistema</h2>
+<p>Esto es tan importante como lo anterior. Todo lo de abajo <b>queda fuera</b> de la versión 1:
+si el cliente lo quiere, es más plazo y más presupuesto, y hay que decidirlo antes de firmar.</p>
+
+<table>
+  <tr><th style="width:30%">No hace</th><th>Por qué / qué implicaría</th></tr>
+  <tr><td><b>No cobra dinero en línea</b></td><td>No integra Webpay, Mercado Pago ni transferencias. Solo <i>registra</i> montos. Integrar una pasarela son 2 a 4 semanas extra y exige una cuenta de comercio a nombre del cliente. <span class="pill fuera">fuera</span></td></tr>
+  <tr><td><b>No emite boleta ni factura</b></td><td>El ticket es un comprobante interno, <b>no</b> es un documento tributario del SII. Emitir DTE requiere integración con un proveedor autorizado y la certificación correspondiente. <span class="pill fuera">fuera</span></td></tr>
+  <tr><td><b>No hace seguimiento GPS en vivo</b></td><td>No muestra al repartidor moviéndose en un mapa en tiempo real. Eso es otro producto: consumo de batería, permisos en segundo plano y costos de mapas. <span class="pill fuera">fuera</span></td></tr>
+  <tr><td><b>No optimiza rutas</b></td><td>No ordena 20 entregas en la ruta más corta. El QR abre <b>un</b> destino a la vez. La optimización de rutas es un servicio pagado aparte. <span class="pill fuera">fuera</span></td></tr>
+  <tr><td><b>No integra couriers</b></td><td>No genera etiquetas de Chilexpress, Starken, Bluexpress ni Correos de Chile, ni consulta sus estados. Cada uno tiene su propia API y su propio contrato. <span class="pill fuera">fuera</span></td></tr>
+  <tr><td><b>No manda WhatsApp automático</b></td><td>Se puede <i>compartir</i> el ticket manualmente por WhatsApp. Enviar mensajes automáticos exige la API oficial de WhatsApp Business, verificación de la empresa y costo por conversación. <span class="pill fuera">fuera</span></td></tr>
+  <tr><td><b>No controla stock ni bodega</b></td><td>El producto se describe en el envío; no hay inventario, ni descuento de existencias, ni alertas de quiebre. <span class="pill fuera">fuera</span></td></tr>
+  <tr><td><b>No es una app de las tiendas</b></td><td>Es una PWA: se instala desde el navegador. Publicar en App Store y Google Play son cuentas de desarrollador pagadas, revisiones y otro ciclo de trabajo. <span class="pill fuera">fuera</span></td></tr>
+  <tr><td><b>No tiene portal para el cliente final</b></td><td>El destinatario no entra a ver "dónde va mi pedido", salvo que se active la página pública de seguimiento (ver §10, es una decisión abierta). <span class="pill v2">a decidir</span></td></tr>
+  <tr><td><b>No firma digitalmente la recepción</b></td><td>No hay firma con el dedo en pantalla ni validación de identidad de quien recibe. Se puede agregar. <span class="pill v2">a decidir</span></td></tr>
+  <tr><td><b>No calcula tarifas por distancia</b></td><td>La tarifa es por comuna o por zona, no por kilómetros recorridos. Cobrar por distancia real exige geocodificar y calcular rutas, con costo por consulta. <span class="pill v2">a decidir</span></td></tr>
+  <tr><td><b>No lee el QR desde adentro de la app</b></td><td>Se escanea con la cámara nativa del celular, que es lo que todo el mundo ya hace. Un lector dentro de la app es opcional. <span class="pill v2">a decidir</span></td></tr>
+  <tr><td><b>No tiene contabilidad</b></td><td>Calcula ingresos, costos y neto para gestión. No es un sistema contable, no maneja IVA, ni libros, ni se conecta con un ERP. <span class="pill fuera">fuera</span></td></tr>
+  <tr><td><b>No funciona en varios idiomas</b></td><td>Solo español de Chile. <span class="pill fuera">fuera</span></td></tr>
+  <tr><td><b>No maneja múltiples empresas</b></td><td>Una sola empresa con sus usuarios. Si mañana hay que vender el sistema a varios negocios separados, eso es multi-tenant y se diseña distinto <b>desde el día uno</b>. <b>Pregunta A-5.</b> <span class="pill fuera">fuera</span></td></tr>
+</table>
+
+<div class="caja stop">
+  <div class="titulo">La frase que hay que decirle al cliente, textual</div>
+  «El sistema <b>registra y organiza</b> los envíos y la plata que generan, y le ahorra al
+  repartidor tipear direcciones. <b>No cobra, no emite boletas del SII, no rastrea en vivo y no
+  reemplaza al courier.</b>» Si el cliente asiente a eso, el proyecto está bien encuadrado. Si
+  frunce el ceño en alguna, esa es la conversación que hay que tener <i>antes</i> de cotizar.
+</div>
+
+<!-- ===================== 5 ===================== -->
+<h2 class="sec pagebreak">5. Módulos: detalle funcional</h2>
+
+<h3>M1 · Cuentas y sesión</h3>
+<p>Correo y contraseña, con la contraseña guardada cifrada (nunca en texto plano). Tres roles:</p>
+<table>
+  <tr><th style="width:18%">Rol</th><th>Puede</th><th>No puede</th></tr>
+  <tr><td><b>Administrador</b></td><td>Todo: usuarios, tarifas, comunas, ver ganancias completas, anular envíos, exportar</td><td>—</td></tr>
+  <tr><td><b>Operador</b></td><td>Crear y editar envíos, imprimir tickets, ver el registro completo</td><td>Cambiar tarifas, crear usuarios, ver el margen neto</td></tr>
+  <tr><td><b>Repartidor</b></td><td>Ver solo sus envíos asignados, abrir el mapa, marcar entregado/fallido, subir foto</td><td>Ver montos de otros, editar tarifas, ver ganancias del negocio</td></tr>
+</table>
+<p><span style="background:#eef2f7;padding:0 4px;">[SUPUESTO]</span> Tres roles. Si el negocio es
+una sola persona, sobra con uno y se simplifica; si hay más perfiles (supervisor de zona,
+dueño de tienda), hay que definirlos ahora. <b>Pregunta A-1.</b></p>
+
+<h3>M2 · Destinatarios y direcciones</h3>
+<p>Un destinatario puede tener varias direcciones; una dirección pertenece siempre a una comuna.
+Campos: calle, número, departamento/casa/oficina, referencia libre, comuna, región (derivada),
+código postal (opcional, en Chile casi nunca se usa), y opcionalmente coordenadas
+(latitud/longitud) si se activa la geocodificación.</p>
+<p>La <b>referencia</b> es el campo que más ahorra llamadas telefónicas en la práctica: «casa de
+reja negra, frente al almacén», «el conserje recibe hasta las 20:00».</p>
+
+<h3>M3 · Productos y el envío</h3>
+<p>El envío es la unidad central. Contiene: folio, destinatario, dirección, comuna, uno o más
+productos, tarifa, valor declarado, forma de pago, observaciones, fotos, estado, repartidor
+asignado, fechas y el usuario que lo creó.</p>
+
+<h3>M4 · Captura de la foto</h3>
+<ul>
+  <li>Se abre la cámara <b>trasera</b> del celular directamente desde la app.</li>
+  <li>Vista previa antes de aceptar, con opción de repetir.</li>
+  <li>Compresión automática (máx. ~1600&nbsp;px de lado mayor, ~300&nbsp;KB) para no gastar datos móviles ni almacenamiento.</li>
+  <li>Se guarda con fecha, hora, usuario y folio. <b>Se elimina la ubicación GPS incrustada en la foto (EXIF)</b>, salvo que el cliente pida lo contrario por escrito.</li>
+  <li>Si la subida falla, queda en cola y se reintenta; el envío no se pierde.</li>
+</ul>
+
+<h3>M5 · Comunas, zonas y tarifas</h3>
+<p>Se carga la lista oficial de comunas de Chile (346, con su región). Desde administración se
+define para cada comuna: si está en cobertura, a qué zona pertenece y cuál es su tarifa. La
+tarifa se sugiere automáticamente al elegir la comuna, y el operador puede sobrescribirla si el
+cliente lo permite (<b>pregunta E-3</b>).</p>
+
+<h3>M6 · Ticket</h3>
+<table>
+  <tr><th style="width:26%">Elemento</th><th>Contenido</th></tr>
+  <tr><td>Encabezado</td><td>Logo, nombre del negocio, teléfono de contacto</td></tr>
+  <tr><td>Folio</td><td>Correlativo único e irrepetible, ej. <code>ENV-2026-004137</code>, también en texto para leerlo a mano</td></tr>
+  <tr><td>Fecha y hora</td><td>De emisión, y fecha comprometida de entrega si se define</td></tr>
+  <tr><td>Destinatario</td><td>Nombre y teléfono</td></tr>
+  <tr><td>Dirección</td><td>Calle, número, depto, referencia, <b>comuna en grande</b></td></tr>
+  <tr><td>Producto</td><td>Descripción, cantidad, bultos</td></tr>
+  <tr><td>Montos</td><td>Tarifa de envío, valor a cobrar al recibir (si aplica), estado de pago</td></tr>
+  <tr><td>QR</td><td>Mínimo 2,5&nbsp;cm × 2,5&nbsp;cm con margen blanco alrededor, o no escanea bien en térmico</td></tr>
+  <tr><td>Pie</td><td>Texto libre configurable: condiciones, teléfono de reclamos</td></tr>
+</table>
+
+<h3>M7 · Registro y estados del envío</h3>
+<table>
+  <tr><th style="width:20%">Estado</th><th>Significa</th><th style="width:26%">Pasa a</th></tr>
+  <tr><td><b>Borrador</b></td><td>Se está cargando, aún sin folio</td><td>Creado / se descarta</td></tr>
+  <tr><td><b>Creado</b></td><td>Confirmado, con ticket emitido</td><td>Asignado / Anulado</td></tr>
+  <tr><td><b>Asignado</b></td><td>Tiene repartidor</td><td>En ruta / Creado</td></tr>
+  <tr><td><b>En ruta</b></td><td>Salió a reparto</td><td>Entregado / Fallido</td></tr>
+  <tr><td><b>Entregado</b></td><td>Se entregó; con foto y hora</td><td>— (estado final; cuenta para ganancias)</td></tr>
+  <tr><td><b>Fallido</b></td><td>No se pudo entregar, con motivo obligatorio</td><td>Reagendado / Devuelto</td></tr>
+  <tr><td><b>Reagendado</b></td><td>Se intenta otro día</td><td>En ruta</td></tr>
+  <tr><td><b>Devuelto</b></td><td>Volvió al origen</td><td>— (estado final)</td></tr>
+  <tr><td><b>Anulado</b></td><td>Se canceló; no se borra, queda con la marca</td><td>— (estado final)</td></tr>
+</table>
+<p><span style="background:#eef2f7;padding:0 4px;">[SUPUESTO]</span> Estos nueve estados. Menos
+estados = app más simple y más rápida de usar en la calle. <b>Pregunta F-1.</b></p>
+
+<h3>M8 · Ganancias y reportes</h3>
+<p>Pantalla con: total de envíos del período, monto facturado, costos, neto, promedio por envío,
+tasa de entregas fallidas, ranking de comunas y evolución diaria. Todo filtrable por rango de
+fechas y exportable.</p>
+
+<h3>M9 · Administración</h3>
+<p>Usuarios y roles, comunas y tarifas, datos del negocio y logo, textos del ticket,
+configuración del QR (a dónde apunta), y los tipos de costo que se pueden cargar.</p>
+
+<!-- ===================== 6 ===================== -->
+<h2 class="sec pagebreak">6. Requerimientos funcionales (RF)</h2>
+<p>Numerados para poder decir después «el RF-14 está listo» sin ambigüedad.</p>
+<table>
+  <tr><th style="width:11%">ID</th><th>Requerimiento</th><th style="width:13%">Prioridad</th></tr>
+  <tr><td class="id">RF-01</td><td>El usuario inicia sesión con correo y contraseña</td><td>Imprescindible</td></tr>
+  <tr><td class="id">RF-02</td><td>El usuario recupera su contraseña por correo</td><td>Alta</td></tr>
+  <tr><td class="id">RF-03</td><td>La sesión permanece activa en el dispositivo hasta cerrarla o 30 días</td><td>Alta</td></tr>
+  <tr><td class="id">RF-04</td><td>Cada usuario tiene un rol que limita lo que ve y puede hacer</td><td>Imprescindible</td></tr>
+  <tr><td class="id">RF-05</td><td>El administrador crea, edita y desactiva usuarios</td><td>Alta</td></tr>
+  <tr><td class="id">RF-06</td><td>El sistema registra destinatarios con nombre y teléfono</td><td>Imprescindible</td></tr>
+  <tr><td class="id">RF-07</td><td>El sistema registra direcciones con calle, número, depto, referencia y comuna</td><td>Imprescindible</td></tr>
+  <tr><td class="id">RF-08</td><td>El sistema ofrece la lista oficial de comunas de Chile y deriva la región</td><td>Imprescindible</td></tr>
+  <tr><td class="id">RF-09</td><td>Las direcciones ya usadas se pueden reutilizar sin volver a escribirlas</td><td>Media</td></tr>
+  <tr><td class="id">RF-10</td><td>El envío admite uno o más productos con descripción y cantidad</td><td>Imprescindible</td></tr>
+  <tr><td class="id">RF-11</td><td>El sistema valida los campos obligatorios antes de permitir continuar</td><td>Imprescindible</td></tr>
+  <tr><td class="id">RF-12</td><td>La cámara se habilita solo cuando la validación es correcta</td><td>Alta</td></tr>
+  <tr><td class="id">RF-13</td><td>El usuario toma una foto desde la cámara del dispositivo y puede repetirla</td><td>Imprescindible</td></tr>
+  <tr><td class="id">RF-14</td><td>La foto se comprime, se sube y queda asociada al envío</td><td>Imprescindible</td></tr>
+  <tr><td class="id">RF-15</td><td>El sistema elimina los metadatos de ubicación de la foto antes de guardarla</td><td>Alta</td></tr>
+  <tr><td class="id">RF-16</td><td>La comuna determina la tarifa sugerida del envío</td><td>Imprescindible</td></tr>
+  <tr><td class="id">RF-17</td><td>El administrador define tarifas por comuna o por zona</td><td>Alta</td></tr>
+  <tr><td class="id">RF-18</td><td>El sistema impide crear envíos a comunas fuera de cobertura</td><td>Media</td></tr>
+  <tr><td class="id">RF-19</td><td>Al confirmar, el sistema asigna un folio único e irrepetible</td><td>Imprescindible</td></tr>
+  <tr><td class="id">RF-20</td><td>El sistema genera el ticket con todos los datos del envío</td><td>Imprescindible</td></tr>
+  <tr><td class="id">RF-21</td><td>El ticket se genera en formato térmico 80&nbsp;mm y en A4/etiqueta</td><td>Alta</td></tr>
+  <tr><td class="id">RF-22</td><td>El ticket se imprime, se descarga en PDF y se comparte</td><td>Imprescindible</td></tr>
+  <tr><td class="id">RF-23</td><td>El sistema genera un código QR único por envío</td><td>Imprescindible</td></tr>
+  <tr><td class="id">RF-24</td><td>Al escanear el QR se abre la navegación hacia la dirección de destino</td><td>Imprescindible</td></tr>
+  <tr><td class="id">RF-25</td><td>El administrador elige si el QR abre Google Maps, Waze o deja elegir</td><td>Media</td></tr>
+  <tr><td class="id">RF-26</td><td>Desde el detalle del envío hay un botón que abre el mapa sin escanear</td><td>Alta</td></tr>
+  <tr><td class="id">RF-27</td><td>El registro lista todos los envíos con paginación</td><td>Imprescindible</td></tr>
+  <tr><td class="id">RF-28</td><td>El registro se busca por folio, nombre, teléfono o dirección</td><td>Alta</td></tr>
+  <tr><td class="id">RF-29</td><td>El registro se filtra por fecha, comuna, estado y repartidor</td><td>Alta</td></tr>
+  <tr><td class="id">RF-30</td><td>El envío avanza por estados y guarda quién y cuándo lo cambió</td><td>Imprescindible</td></tr>
+  <tr><td class="id">RF-31</td><td>Al marcar fallido se exige un motivo</td><td>Alta</td></tr>
+  <tr><td class="id">RF-32</td><td>Se puede subir una foto de constancia al momento de entregar</td><td>Media</td></tr>
+  <tr><td class="id">RF-33</td><td>El envío se anula pero nunca se borra físicamente</td><td>Alta</td></tr>
+  <tr><td class="id">RF-34</td><td>El sistema muestra totales de envíos y montos por día, semana y mes</td><td>Imprescindible</td></tr>
+  <tr><td class="id">RF-35</td><td>El sistema desglosa ganancias por comuna y por repartidor</td><td>Alta</td></tr>
+  <tr><td class="id">RF-36</td><td>Se pueden registrar costos y el sistema calcula el resultado neto</td><td>Alta</td></tr>
+  <tr><td class="id">RF-37</td><td>Los reportes y el registro se exportan a Excel/CSV</td><td>Alta</td></tr>
+  <tr><td class="id">RF-38</td><td>La app se instala en el celular desde el navegador (PWA)</td><td>Alta</td></tr>
+  <tr><td class="id">RF-39</td><td>El administrador configura logo, datos del negocio y textos del ticket</td><td>Media</td></tr>
+  <tr><td class="id">RF-40</td><td>El sistema guarda un registro de auditoría de las acciones sensibles</td><td>Media</td></tr>
+</table>
+
+<!-- ===================== 7 ===================== -->
+<h2 class="sec">7. Requerimientos no funcionales (RNF)</h2>
+<table>
+  <tr><th style="width:11%">ID</th><th>Requerimiento</th></tr>
+  <tr><td class="id">RNF-01</td><td>Diseñado para el celular primero; usable con una sola mano y con guantes</td></tr>
+  <tr><td class="id">RNF-02</td><td>Crear un envío completo toma menos de 60 segundos con los datos a mano</td></tr>
+  <tr><td class="id">RNF-03</td><td>Las pantallas cargan en menos de 2 segundos con 4G</td></tr>
+  <tr><td class="id">RNF-04</td><td>El ticket con QR se genera en menos de 3 segundos</td></tr>
+  <tr><td class="id">RNF-05</td><td>Contraseñas cifradas; comunicación siempre por HTTPS</td></tr>
+  <tr><td class="id">RNF-06</td><td>Las fotos no son públicas: solo accesibles con sesión iniciada y permiso</td></tr>
+  <tr><td class="id">RNF-07</td><td>Respaldo automático diario de la base de datos, con 30 días de retención</td></tr>
+  <tr><td class="id">RNF-08</td><td>Funciona en Chrome y Safari de las dos últimas versiones mayores, Android e iOS</td></tr>
+  <tr><td class="id">RNF-09</td><td>Soporta al menos 20 usuarios en simultáneo y 100.000 envíos sin degradarse</td></tr>
+  <tr><td class="id">RNF-10</td><td>Textos, montos y fechas en español de Chile, pesos chilenos y formato dd/mm/aaaa</td></tr>
+  <tr><td class="id">RNF-11</td><td>El sistema sigue operando si el servicio de mapas no responde (el QR nunca deja de generarse)</td></tr>
+  <tr><td class="id">RNF-12</td><td>El código queda documentado y entregado en un repositorio del cliente</td></tr>
+</table>
+
+<!-- ===================== 8 ===================== -->
+<h2 class="sec pagebreak">8. Modelo de datos</h2>
+<p>Las tablas mínimas. Sirve para que cualquier desarrollador entienda el sistema en cinco minutos.</p>
+<table>
+  <tr><th style="width:20%">Entidad</th><th>Campos principales</th></tr>
+  <tr><td><b>usuario</b></td><td>id, nombre, correo, contraseña (cifrada), rol, teléfono, activo, creado_en</td></tr>
+  <tr><td><b>destinatario</b></td><td>id, nombre, teléfono, correo, notas, creado_por, creado_en</td></tr>
+  <tr><td><b>direccion</b></td><td>id, destinatario_id, calle, número, depto, referencia, comuna_id, lat, lon, es_principal</td></tr>
+  <tr><td><b>comuna</b></td><td>id, nombre, región, provincia, zona_id, en_cobertura, tarifa_base</td></tr>
+  <tr><td><b>zona</b></td><td>id, nombre, tarifa, color, orden</td></tr>
+  <tr><td><b>producto</b></td><td>id, nombre, descripción, precio_referencia, activo</td></tr>
+  <tr><td><b>envio</b></td><td>id, <b>folio</b>, destinatario_id, direccion_id, comuna_id, tarifa, valor_declarado, forma_pago, estado, repartidor_id, creado_por, creado_en, entregado_en, observaciones</td></tr>
+  <tr><td><b>envio_producto</b></td><td>id, envio_id, producto_id, descripción, cantidad, peso</td></tr>
+  <tr><td><b>foto</b></td><td>id, envio_id, tipo (paquete / entrega), url, tomada_en, tomada_por</td></tr>
+  <tr><td><b>envio_estado</b></td><td>id, envio_id, estado_anterior, estado_nuevo, motivo, usuario_id, fecha</td></tr>
+  <tr><td><b>costo</b></td><td>id, fecha, tipo (bencina, comisión, otro), monto, envio_id (opcional), nota</td></tr>
+  <tr><td><b>config</b></td><td>clave, valor — logo, datos del negocio, destino del QR, textos del ticket</td></tr>
+  <tr><td><b>auditoria</b></td><td>id, usuario_id, acción, entidad, entidad_id, datos, fecha, ip</td></tr>
+</table>
+
+<!-- ===================== 9 ===================== -->
+<h2 class="sec">9. Arquitectura y tecnología propuesta</h2>
+<table>
+  <tr><th style="width:22%">Capa</th><th>Propuesta</th><th style="width:34%">Por qué</th></tr>
+  <tr><td>Interfaz</td><td>Aplicación web responsiva instalable (PWA)</td><td>Un solo desarrollo sirve para celular, tablet y PC. Sin tiendas de aplicaciones ni cuentas de desarrollador.</td></tr>
+  <tr><td>Servidor y datos</td><td>Base de datos relacional (PostgreSQL o MySQL) + API</td><td>Los envíos, montos y estados son datos relacionales clásicos; reportes y exportaciones salen naturales.</td></tr>
+  <tr><td>Autenticación</td><td>Servicio de autenticación con roles</td><td>No inventar seguridad propia: es el lugar donde más barato sale usar algo probado.</td></tr>
+  <tr><td>Fotos</td><td>Almacenamiento de objetos con enlaces temporales firmados</td><td>Las fotos no quedan públicas en internet y no se hinchan la base de datos.</td></tr>
+  <tr><td>QR</td><td>Generación en el servidor, embebida en el PDF del ticket</td><td>Así el QR se ve idéntico en pantalla, en el PDF y en la impresión térmica.</td></tr>
+  <tr><td>PDF del ticket</td><td>Generación en el servidor</td><td>Impresión consistente entre dispositivos; no depende del navegador del repartidor.</td></tr>
+  <tr><td>Mapas</td><td>Enlaces universales a Google Maps / Waze (gratis) + Google Places opcional (pagado)</td><td>Abrir el mapa no cuesta nada; solo el autocompletado y la geocodificación se pagan por uso.</td></tr>
+  <tr><td>Hosting</td><td>Nube administrada, dominio propio con HTTPS</td><td>Sin servidores que mantener; costo mensual bajo y predecible.</td></tr>
+</table>
+<p><span style="background:#eef2f7;padding:0 4px;">[SUPUESTO]</span> Esto es una propuesta, no una
+imposición: si el cliente ya tiene un hosting, un dominio o una tecnología que su equipo mantiene,
+se adapta. <b>Pregunta H-1.</b></p>
+
+<!-- ===================== 10 ===================== -->
+<h2 class="sec pagebreak">10. El QR y la apertura de mapas — la parte delicada</h2>
+<p>Esta es la funcionalidad estrella del pedido y la que más se malentiende. Hay que elegir
+<b>qué guarda el QR</b>, y cada opción tiene consecuencias reales.</p>
+
+<table>
+  <tr><th style="width:20%">Opción</th><th>Qué pasa al escanear</th><th style="width:30%">Contra</th></tr>
+  <tr><td><b>A. Enlace al envío</b><br><span class="pill v1">recomendada</span></td>
+      <td>Abre una página del sistema con todos los datos del envío y un botón «Ir con Google Maps» y otro «Ir con Waze». También sirve para marcar la entrega.</td>
+      <td>Requiere internet en el momento de escanear. El enlace debe ser secreto y no adivinable.</td></tr>
+  <tr><td><b>B. Enlace directo al mapa</b></td>
+      <td>Abre Google Maps (o Waze) de inmediato con la ruta al destino, sin pantallas intermedias.</td>
+      <td>El QR queda «amarrado» a una sola app de mapas. No muestra ningún dato del envío. Si la dirección era ambigua, el mapa elige mal y nadie se entera.</td></tr>
+  <tr><td><b>C. Coordenadas (<code>geo:</code>)</b></td>
+      <td>Abre la app de mapas por defecto del teléfono en el punto exacto.</td>
+      <td>Exige tener coordenadas de <b>todas</b> las direcciones, es decir geocodificar (servicio pagado). En iPhone el soporte es irregular.</td></tr>
+  <tr><td><b>D. Solo texto</b></td>
+      <td>Muestra la dirección como texto para copiar y pegar.</td>
+      <td>No cumple lo pedido: sigue habiendo un paso manual.</td></tr>
+</table>
+
+<div class="caja">
+  <div class="titulo">Recomendación</div>
+  <b>Opción A</b>, con enlaces a Maps y Waze dentro de la página. El QR queda útil aunque después
+  cambie la app de mapas preferida, el repartidor ve los datos del envío al escanear, y el mismo
+  QR sirve para marcar la entrega. Además es el único que permite saber <i>cuándo</i> se escaneó
+  cada envío. <b>Pregunta D-1 del cuestionario.</b>
+</div>
+
+<h4>Cómo se abre el mapa, técnicamente</h4>
+<ul>
+  <li><b>Google Maps:</b> enlace universal con la dirección de destino y el modo de navegación. Abre la app si está instalada, y si no, el sitio web. Funciona en Android y iOS.</li>
+  <li><b>Waze:</b> enlace universal equivalente. Funciona mejor con coordenadas que con texto.</li>
+  <li><b>Apple Maps:</b> soportado si el cliente lo pide; en iPhone es el mapa por defecto de muchos usuarios.</li>
+</ul>
+
+<div class="caja alerta">
+  <div class="titulo">Advertencia honesta sobre las direcciones</div>
+  Si la dirección se escribe como texto libre, el mapa <b>a veces se equivoca</b>: hay calles con
+  el mismo nombre en varias comunas, numeraciones inexistentes y pasajes que Google no conoce. Por
+  eso <b>siempre</b> se envía la comuna junto con la calle. La única forma de eliminar el problema
+  es usar el autocompletado de Google Places al cargar la dirección (el operador elige la
+  dirección de una lista real y se guardan las coordenadas exactas). Eso <b>tiene costo por
+  consulta</b> y requiere una cuenta de Google Cloud con tarjeta asociada. <b>Pregunta D-3.</b>
+</div>
+
+<div class="caja stop">
+  <div class="titulo">«mps» — necesito confirmación</div>
+  En el pedido original dice «para que <b>mps</b> se abra». Lo interpreté como <b>maps</b> (Google
+  Maps / Waze), que es lo coherente con «colocar la dirección para no colocarla manualmente». Si
+  en realidad se refería a <b>Mercado Pago (MP)</b> — es decir, que el QR sirva para <i>cobrar</i> —
+  eso es un proyecto distinto: integración de pagos, cuenta de comercio, conciliación. <b>Es la
+  pregunta D-0 y hay que responderla antes que cualquier otra cosa.</b>
+</div>
+
+<!-- ===================== 11 ===================== -->
+<h2 class="sec">11. Ganancias: cómo se calculan</h2>
+<p>La fórmula que propongo, explícita para que nadie discuta después qué significa «ganancia»:</p>
+<div class="caja">
+  <b>Ingreso del período</b> = suma de las tarifas de los envíos <b>entregados</b> en el período<br>
+  <b>Costos del período</b> = costos registrados (bencina, comisiones a repartidores, otros)<br>
+  <b>Ganancia neta</b> = Ingreso − Costos
+</div>
+<table>
+  <tr><th style="width:36%">Decisión</th><th>Propuesta [SUPUESTO]</th></tr>
+  <tr><td>¿Qué envíos cuentan como ingreso?</td><td>Solo los <b>entregados</b>. Los creados o en ruta se muestran aparte como «proyectado».</td></tr>
+  <tr><td>¿El valor del producto cuenta?</td><td><b>No.</b> La ganancia es la tarifa de envío. El valor declarado del producto es solo referencia de seguro. <b>Pregunta G-2.</b></td></tr>
+  <tr><td>¿Los fallidos cobran algo?</td><td>No por defecto; se puede configurar una tarifa de visita fallida. <b>Pregunta G-3.</b></td></tr>
+  <tr><td>¿Cómo se paga al repartidor?</td><td>Como un costo: monto fijo por envío entregado o porcentaje de la tarifa. <b>Pregunta G-4.</b></td></tr>
+  <tr><td>¿Se maneja IVA?</td><td>No. Los montos son brutos, sin descomposición tributaria. <b>Pregunta G-5.</b></td></tr>
+</table>
+
+<!-- ===================== 12 ===================== -->
+<h2 class="sec">12. Legal, privacidad y las fotos</h2>
+<p>El sistema guarda datos personales de terceros (nombre, teléfono y dirección del destinatario)
+y fotografías. En Chile eso está regulado por la Ley 19.628 de protección de la vida privada, y
+por la Ley 21.719, que la moderniza, crea una Agencia de Protección de Datos y establece multas;
+su entrada en vigencia está fijada para fines de 2026 — <b>confirmar la fecha exacta con un
+abogado antes de salir a producción</b>.</p>
+<table>
+  <tr><th style="width:32%">Punto</th><th>Qué hace el sistema</th></tr>
+  <tr><td>Acceso a las fotos</td><td>Nunca públicas: solo con sesión iniciada y mediante enlaces temporales que expiran.</td></tr>
+  <tr><td>Ubicación en las fotos</td><td>Se borran los metadatos EXIF (incluye GPS) antes de almacenar.</td></tr>
+  <tr><td>Retención</td><td>Propuesta: fotos 12 meses, datos de envíos 5 años. <b>Debe definirlo el cliente. Pregunta I-2.</b></td></tr>
+  <tr><td>Borrado a pedido</td><td>Una persona puede pedir que se eliminen sus datos; hay que tener un procedimiento definido.</td></tr>
+  <tr><td>Quién ve qué</td><td>El repartidor ve solo sus envíos asignados, no la base completa de clientes.</td></tr>
+  <tr><td>Contraseñas</td><td>Cifradas con algoritmo de hashing moderno; nadie, ni el administrador, puede leerlas.</td></tr>
+</table>
+<div class="caja alerta">
+  <div class="titulo">No soy abogado</div>
+  Esta sección es orientativa y describe medidas técnicas, no asesoría legal. Si el cliente maneja
+  volúmenes relevantes de datos personales, que lo revise un especialista. Lo que sí es
+  responsabilidad del desarrollo: cifrado, control de acceso, borrado de EXIF, respaldos y
+  registro de auditoría — y todo eso está incluido.
+</div>
+
+<!-- ===================== 13 ===================== -->
+<h2 class="sec pagebreak">13. Cuestionario para el cliente</h2>
+<p>Este es el documento que le mandas. Está ordenado de lo que <b>más</b> cambia el proyecto a lo
+que menos. Si el cliente solo puede responder diez preguntas, que sean las del <b>bloque A</b>.</p>
+
+<div class="caja">
+  <div class="titulo">Instrucciones para el cliente</div>
+  No hay respuestas malas. Si algo no lo sabes, escribe «no sé» y lo conversamos: es mucho más
+  barato responder «no sé» ahora que cambiarlo cuando esté programado. Donde hay opciones, marca
+  una con un círculo.
+</div>
+
+<h3>Bloque A · Las preguntas que definen el proyecto</h3>
+
+<div class="preg"><div class="q"><span class="num">A-1</span>¿Quiénes van a usar el sistema y cuántos son? (dueño, operadores en oficina, repartidores en la calle)</div>
+<div class="linea-resp doble"></div></div>
+
+<div class="preg"><div class="q"><span class="num">A-2</span>¿El repartidor necesita crear o consultar envíos <b>sin señal de internet</b>?</div>
+<div class="opts">Nunca / A veces, en sectores puntuales / Sí, es habitual y crítico</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">A-3</span>¿Quién escanea el QR: el repartidor, el cliente que recibe, o alguien en bodega?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">A-4</span>¿El ticket se imprime en papel de verdad? ¿Con qué impresora?</div>
+<div class="opts">No se imprime, se ve en pantalla / Impresora térmica 80&nbsp;mm / Térmica portátil Bluetooth / Impresora de etiquetas / Impresora común en A4</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">A-5</span>¿El sistema es para <b>un solo negocio</b>, o la idea es venderlo o compartirlo con otros negocios que no deben verse entre sí?</div>
+<div class="opts">Un solo negocio / Varios negocios separados (esto cambia el diseño desde el día uno)</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">A-6</span>¿Cuántos envíos se hacen al día hoy, y cuántos esperas hacer en un año?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">A-7</span>¿Cómo lo hacen hoy? (cuaderno, Excel, WhatsApp, otro sistema) ¿Qué es lo que <b>más</b> molesta de la forma actual?</div>
+<div class="linea-resp doble"></div></div>
+
+<h3>Bloque B · Usuarios, acceso y permisos</h3>
+
+<div class="preg"><div class="q"><span class="num">B-1</span>¿Sirve iniciar sesión con correo y contraseña, o prefieres otra forma?</div>
+<div class="opts">Correo y contraseña / Con la cuenta de Google / Usuario y PIN numérico (más rápido en la calle) / Teléfono con código SMS (tiene costo por mensaje)</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">B-2</span>¿El repartidor puede ver <b>los montos</b> de los envíos y las ganancias del negocio?</div>
+<div class="opts">Ve todo / Ve solo la tarifa del envío que lleva / No ve ningún monto</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">B-3</span>¿El repartidor ve <b>todos</b> los envíos o solo los asignados a él?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">B-4</span>¿Quién puede <b>editar</b> un envío ya confirmado, y hasta cuándo? ¿Quién puede anularlo?</div>
+<div class="linea-resp doble"></div></div>
+
+<div class="preg"><div class="q"><span class="num">B-5</span>¿Los usuarios los crea el administrador, o cualquiera se puede registrar solo?</div>
+<div class="linea-resp"></div></div>
+
+<h3>Bloque C · Alta del envío, datos y foto</h3>
+
+<div class="preg"><div class="q"><span class="num">C-1</span>Del destinatario, ¿qué datos son <b>obligatorios</b>? (nombre, teléfono, correo, RUT, otro)</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">C-2</span>Del producto, ¿qué hay que registrar? (descripción, cantidad, peso, dimensiones, valor declarado, código propio, fragilidad, refrigerado)</div>
+<div class="linea-resp doble"></div></div>
+
+<div class="preg"><div class="q"><span class="num">C-3</span>¿Un envío puede llevar <b>varios productos</b> y varios bultos, o siempre es uno?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">C-4</span>La foto: ¿en qué momento se toma y de qué es?</div>
+<div class="opts">Del paquete al crear el envío / De la entrega al momento de dejarlo / Las dos / Otra cosa (¿cuál?)</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">C-5</span>¿La foto es <b>obligatoria</b> para poder emitir el ticket, o se puede saltar?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">C-6</span>¿Cuántas fotos por envío como máximo? ¿Se pueden subir desde la galería o solo tomar con la cámara en el momento?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">C-7</span>¿Hace falta firma del que recibe, o el nombre y RUT de quien recibió?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">C-8</span>¿Hay que registrar también la dirección de <b>origen</b> (de dónde sale el paquete), o siempre sale del mismo lugar?</div>
+<div class="linea-resp"></div></div>
+
+<h3 class="pagebreak">Bloque D · QR y mapas</h3>
+
+<div class="preg"><div class="q"><span class="num">D-0</span><b style="color:#c0392b;">Pregunta crítica:</b> cuando dices que el QR abra «mps», ¿te refieres a <b>Maps</b> (Google Maps / Waze, para navegar hasta la dirección) o a <b>Mercado Pago</b> (para cobrar)?</div>
+<div class="opts">Maps, para navegar / Mercado Pago, para cobrar / Las dos cosas (son dos QR distintos)</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">D-1</span>Al escanear el QR, ¿qué prefieres que pase?</div>
+<div class="opts">(A) Abre una página con los datos del envío y botones para ir en Maps o Waze &nbsp;/&nbsp; (B) Abre el mapa inmediatamente, sin pantallas intermedias</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">D-2</span>¿Qué app de mapas usan tus repartidores hoy?</div>
+<div class="opts">Google Maps / Waze / Apple Maps / Cada uno la suya</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">D-3</span>¿Estás dispuesto a pagar el servicio de Google (autocompletado de direcciones, unos pocos dólares al mes con volumen bajo) para que las direcciones sean exactas y el mapa nunca se equivoque?</div>
+<div class="opts">Sí / No, prefiero escribir la dirección a mano aunque a veces falle / Depende del costo: ¿cuánto sería?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">D-4</span>El QR de un envío, ¿debe seguir funcionando después de entregado, o caduca?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">D-5</span>¿El QR debe llevar el logo del negocio al centro? (se puede, pero hay que probar que siga escaneando bien en impresión térmica)</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">D-6</span>¿El cliente final debería poder escanear el QR y ver el estado de su pedido en una página pública?</div>
+<div class="opts">Sí / No / Sí, pero mostrando solo el estado, sin datos personales</div>
+<div class="linea-resp"></div></div>
+
+<h3>Bloque E · Comunas, cobertura y tarifas</h3>
+
+<div class="preg"><div class="q"><span class="num">E-1</span>¿En qué comunas reparten hoy? ¿Y hay comunas donde definitivamente <b>no</b> van?</div>
+<div class="linea-resp doble"></div></div>
+
+<div class="preg"><div class="q"><span class="num">E-2</span>¿Cómo se define el precio del envío?</div>
+<div class="opts">Tarifa fija por comuna / Por zonas (grupos de comunas) / Por peso o tamaño / Por distancia en km / Se negocia caso a caso</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">E-3</span>¿El operador puede <b>cambiar a mano</b> la tarifa sugerida en un envío puntual? ¿Necesita autorización?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">E-4</span>¿Hay clientes con precios especiales o convenios distintos a la tarifa general?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">E-5</span>¿Necesitas <b>la lista actual de tus tarifas por comuna</b> cargada de entrada? (si la tienes en un Excel, mándala junto con este documento)</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">E-6</span>¿Hay recargos? (envío urgente, fuera de horario, fin de semana, segundo intento de entrega)</div>
+<div class="linea-resp"></div></div>
+
+<h3>Bloque F · Operación y estados</h3>
+
+<div class="preg"><div class="q"><span class="num">F-1</span>¿Qué estados necesitas de verdad? (propuesta: creado, asignado, en ruta, entregado, fallido, reagendado, devuelto, anulado)</div>
+<div class="linea-resp doble"></div></div>
+
+<div class="preg"><div class="q"><span class="num">F-2</span>Cuando una entrega falla, ¿qué motivos usas? (nadie en el domicilio, dirección incorrecta, rechazado, no tenía el dinero, otro)</div>
+<div class="linea-resp doble"></div></div>
+
+<div class="preg"><div class="q"><span class="num">F-3</span>¿Quién asigna los envíos a cada repartidor: el administrador, o el repartidor toma los que puede?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">F-4</span>¿Trabajan con «rutas» o «salidas» del día (un paquete de envíos que sale junto), o cada envío va por su cuenta?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">F-5</span>¿Hay que avisarle algo al destinatario? (que su envío salió, que está por llegar) ¿Por qué medio?</div>
+<div class="opts">No hay que avisar / WhatsApp manual desde la app / WhatsApp automático (tiene costo por mensaje) / SMS (tiene costo) / Correo electrónico</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">F-6</span>¿Los envíos tienen fecha comprometida de entrega o franja horaria?</div>
+<div class="linea-resp"></div></div>
+
+<h3 class="pagebreak">Bloque G · Dinero y ganancias</h3>
+
+<div class="preg"><div class="q"><span class="num">G-1</span>Cuando dices «ganancias», ¿qué número quieres ver exactamente?</div>
+<div class="opts">Lo que cobré por los envíos / Eso menos los costos / Cuánto le debo a cada repartidor / Todas</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">G-2</span>¿El <b>valor del producto</b> entra en la ganancia, o la ganancia es solo la tarifa de envío?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">G-3</span>¿Un envío fallido se cobra igual (visita en vano) o no se cobra nada?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">G-4</span>¿Cómo se le paga al repartidor: monto fijo por entrega, porcentaje de la tarifa, sueldo, o no aplica?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">G-5</span>¿Hay que separar el IVA en algún lado, o los montos van brutos?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">G-6</span>¿Qué costos quieres poder cargar? (bencina, mantención, peajes, comisiones, arriendo, otros)</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">G-7</span>¿Hay envíos que se pagan contra entrega y hay que cuadrar el efectivo que trae el repartidor al final del día?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">G-8</span>¿Necesitas exportar a Excel para el contador? ¿Con qué columnas y con qué frecuencia?</div>
+<div class="linea-resp"></div></div>
+
+<h3>Bloque H · Técnico, hosting y dominio</h3>
+
+<div class="preg"><div class="q"><span class="num">H-1</span>¿Ya tienes dominio web y hosting contratados? ¿Cuáles?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">H-2</span>¿Con qué dirección quieres que entren los usuarios? (ej. <code>envios.tunegocio.cl</code>)</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">H-3</span>¿Quién va a pagar y administrar las cuentas de servicios (hosting, base de datos, Google Cloud si aplica)? Deben quedar <b>a nombre del cliente</b>, no del desarrollador.</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">H-4</span>¿Qué celulares usan los repartidores? ¿Android, iPhone, de qué años? ¿Son del negocio o personales?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">H-5</span>¿Hay algún sistema actual del que haya que <b>importar</b> datos? (Excel de clientes, de direcciones, historial de envíos)</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">H-6</span>¿El sistema tiene que conectarse con algo que ya usan? (tienda web, Shopify, WooCommerce, un ERP, un courier)</div>
+<div class="linea-resp"></div></div>
+
+<h3>Bloque I · Datos, privacidad y respaldo</h3>
+
+<div class="preg"><div class="q"><span class="num">I-1</span>¿Quién es el responsable de los datos personales de los destinatarios? (persona o empresa, con RUT)</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">I-2</span>¿Cuánto tiempo hay que guardar las fotos y los envíos antes de poder borrarlos?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">I-3</span>¿Alguien externo (un cliente empresa, un auditor) puede pedir ver estos datos?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">I-4</span>Si el sistema se cae un día entero, ¿qué tan grave es? ¿Hay un plan B en papel?</div>
+<div class="linea-resp"></div></div>
+
+<h3>Bloque J · Marca y presentación</h3>
+
+<div class="preg"><div class="q"><span class="num">J-1</span>¿Tienes logo en buena calidad? ¿Colores corporativos definidos?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">J-2</span>¿Qué datos van en el ticket además del envío? (razón social, RUT, teléfono, dirección, redes sociales, texto legal)</div>
+<div class="linea-resp doble"></div></div>
+
+<div class="preg"><div class="q"><span class="num">J-3</span>¿Hay algún sistema o app que te guste como referencia de cómo debería verse?</div>
+<div class="linea-resp"></div></div>
+
+<h3>Bloque K · Plazos, presupuesto y después de la entrega</h3>
+
+<div class="preg"><div class="q"><span class="num">K-1</span>¿Para cuándo lo necesitas funcionando? ¿Hay una fecha que no se puede mover y por qué?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">K-2</span>¿Cuál es el presupuesto disponible? (decirlo ahora evita diseñar algo que no se puede pagar)</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">K-3</span>Si hubiera que dejar algo para una segunda etapa, ¿qué es lo primero que sacarías?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">K-4</span>¿Quién va a capacitar a los repartidores? ¿Hace falta un manual o un video corto?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">K-5</span>Después de entregado, ¿quién mantiene el sistema? ¿Se contrata soporte mensual?</div>
+<div class="linea-resp"></div></div>
+
+<div class="preg"><div class="q"><span class="num">K-6</span>¿Quién es la persona que decide y firma? ¿Con quién se validan las dudas del día a día?</div>
+<div class="linea-resp"></div></div>
+
+<div class="firma">
+  <div>Nombre y firma del cliente &nbsp;·&nbsp; Fecha</div>
+  <div>Nombre y firma del desarrollador &nbsp;·&nbsp; Fecha</div>
+</div>
+
+<!-- ===================== 14 ===================== -->
+<h2 class="sec pagebreak">14. Qué necesito que el cliente entregue</h2>
+<p>Sin estos insumos el desarrollo se frena, por bien especificado que esté todo.</p>
+<table>
+  <tr><th style="width:36%">Insumo</th><th>Para qué</th><th style="width:16%">Cuándo</th></tr>
+  <tr><td>Respuestas del cuestionario (§13)</td><td>Cerrar el alcance y recién ahí cotizar</td><td>Antes de empezar</td></tr>
+  <tr><td>Logo en alta calidad (PNG o SVG) y colores</td><td>Ticket, app, PDF</td><td>Semana 1</td></tr>
+  <tr><td>Datos del negocio: razón social, RUT, dirección, teléfono</td><td>Encabezado del ticket</td><td>Semana 1</td></tr>
+  <tr><td>Excel con tarifas por comuna y comunas en cobertura</td><td>Carga inicial de tarifas</td><td>Semana 1</td></tr>
+  <tr><td>Lista de usuarios con nombre, correo y rol</td><td>Crear las cuentas</td><td>Antes de la prueba</td></tr>
+  <tr><td>Excel de clientes y direcciones existentes, si lo hay</td><td>Migración inicial</td><td>Antes de la prueba</td></tr>
+  <tr><td>Dominio y acceso a su administrador de DNS</td><td>Publicar en la dirección definitiva</td><td>Antes de salir a producción</td></tr>
+  <tr><td>Cuenta de Google Cloud con facturación, si se usa Places</td><td>Autocompletado de direcciones</td><td>Antes de salir a producción</td></tr>
+  <tr><td>Una persona disponible para validar cada semana</td><td>Corregir temprano y no al final</td><td>Todo el proyecto</td></tr>
+  <tr><td>Un celular real de repartidor para probar</td><td>Probar cámara, QR e impresión en el equipo de verdad</td><td>Semana de pruebas</td></tr>
+</table>
+
+<!-- ===================== 15 ===================== -->
+<h2 class="sec">15. Fases, esfuerzo y costos recurrentes</h2>
+<div class="caja alerta">
+  <div class="titulo">Estimación, no cotización</div>
+  Los rangos de abajo son un <b>orden de magnitud</b> para una persona trabajando. Se convierten en
+  una cotización real solo después de tener las respuestas del cuestionario. Cualquier número más
+  preciso que esto, antes de esas respuestas, es adivinanza.
+</div>
+<table>
+  <tr><th style="width:8%">Fase</th><th>Qué se hace</th><th style="width:18%">Esfuerzo estimado</th></tr>
+  <tr><td class="id">F0</td><td>Reunión de definiciones, cuestionario respondido, alcance firmado</td><td>1 semana</td></tr>
+  <tr><td class="id">F1</td><td>Base del sistema: cuentas, roles, base de datos, comunas cargadas</td><td>1 a 2 semanas</td></tr>
+  <tr><td class="id">F2</td><td>Alta de envíos: destinatarios, direcciones, productos, validación, foto</td><td>2 a 3 semanas</td></tr>
+  <tr><td class="id">F3</td><td>Ticket, PDF, impresión, QR y apertura de mapas</td><td>1 a 2 semanas</td></tr>
+  <tr><td class="id">F4</td><td>Registro de envíos, estados, búsqueda, filtros, exportación</td><td>1 a 2 semanas</td></tr>
+  <tr><td class="id">F5</td><td>Ganancias, costos, reportes y gráficos</td><td>1 a 2 semanas</td></tr>
+  <tr><td class="id">F6</td><td>Pruebas en terreno con repartidores reales, ajustes, capacitación, puesta en marcha</td><td>1 a 2 semanas</td></tr>
+  <tr><td colspan="2" style="text-align:right"><b>Total versión 1</b></td><td><b>8 a 14 semanas</b></td></tr>
+</table>
+
+<h4>Costos mensuales que quedan corriendo (los paga el cliente)</h4>
+<table>
+  <tr><th style="width:34%">Servicio</th><th>Comentario</th></tr>
+  <tr><td>Hosting y base de datos</td><td>Hay planes gratuitos para volúmenes bajos; con uso real, un costo mensual modesto y predecible.</td></tr>
+  <tr><td>Almacenamiento de fotos</td><td>Crece con la cantidad de envíos; es la partida que más sube con el tiempo. Se controla con la política de retención (§12).</td></tr>
+  <tr><td>Dominio</td><td>Pago anual.</td></tr>
+  <tr><td>Google Places / geocodificación</td><td><b>Solo si se activa.</b> Se paga por consulta; conviene fijar un tope de gasto en la cuenta de Google.</td></tr>
+  <tr><td>WhatsApp Business API</td><td>Solo si se activan avisos automáticos (está fuera de la v1). Se paga por conversación.</td></tr>
+  <tr><td>Soporte y mantención</td><td>A convenir; sin esto, nadie corrige nada después de la entrega.</td></tr>
+</table>
+
+<!-- ===================== 16 ===================== -->
+<h2 class="sec">16. Riesgos y supuestos</h2>
+<table>
+  <tr><th style="width:30%">Riesgo</th><th>Impacto</th><th style="width:30%">Cómo se mitiga</th></tr>
+  <tr><td>«mps» era Mercado Pago, no Maps</td><td>Alto — cambia el proyecto</td><td>Pregunta D-0, antes de cualquier otra cosa</td></tr>
+  <tr><td>El mapa abre una dirección equivocada</td><td>Alto — es la funcionalidad estrella</td><td>Siempre enviar la comuna; ofrecer Google Places; probar con 20 direcciones reales del cliente antes de entregar</td></tr>
+  <tr><td>El QR no escanea en impresión térmica</td><td>Medio</td><td>Tamaño mínimo 2,5&nbsp;cm, margen blanco, corrección de errores alta; probar en la impresora real del cliente</td></tr>
+  <tr><td>No hay señal donde se reparte</td><td>Alto si no se previó</td><td>Definirlo en A-2; el modo sin conexión hay que diseñarlo desde el inicio, no agregarlo después</td></tr>
+  <tr><td>Las fotos disparan el costo de almacenamiento</td><td>Medio</td><td>Compresión obligatoria y política de retención definida</td></tr>
+  <tr><td>El cliente va agregando pedidos durante el desarrollo</td><td>Alto — es la causa número uno de proyectos que nunca terminan</td><td>Este documento firmado; todo lo que no está aquí es una etapa nueva con su plazo y su precio</td></tr>
+  <tr><td>Los repartidores no usan el sistema</td><td>Alto</td><td>Probar con ellos en la calle en la fase F6, no solo en la oficina; menos campos obligatorios, botones grandes</td></tr>
+  <tr><td>Las cuentas de servicios quedan a nombre del desarrollador</td><td>Medio</td><td>Crearlas a nombre del cliente desde el día uno (H-3)</td></tr>
+</table>
+
+<!-- ===================== 17 ===================== -->
+<h2 class="sec">17. Criterios de aceptación</h2>
+<p>El sistema se da por entregado cuando, con datos reales del cliente y en un celular real:</p>
+<ol>
+  <li>Un usuario inicia sesión y ve solo lo que su rol permite.</li>
+  <li>Se crea un envío completo — destinatario, dirección, comuna, producto, monto — en menos de 60 segundos.</li>
+  <li>El formulario impide continuar si falta un dato obligatorio y lo señala con claridad.</li>
+  <li>La cámara se abre dentro de la app, la foto se sube y se ve después en el detalle del envío.</li>
+  <li>Al confirmar se emite un folio único y se genera el ticket con el QR.</li>
+  <li>El ticket se imprime legible en la impresora del cliente, con el QR escaneable a la primera.</li>
+  <li>Al escanear el QR con la cámara del celular, se abre el mapa con la dirección correcta, sin escribir nada a mano.</li>
+  <li>El envío recorre sus estados hasta «entregado» y queda registrado quién y cuándo lo cambió.</li>
+  <li>El registro se busca y se filtra, y se exporta a Excel.</li>
+  <li>La pantalla de ganancias muestra el total del día y del mes, y cuadra con la suma manual de los envíos entregados.</li>
+  <li>Se prueba con <b>20 direcciones reales</b> del cliente y al menos 19 abren el mapa en el lugar correcto.</li>
+</ol>
+
+<!-- ===================== 18 ===================== -->
+<h2 class="sec">18. Glosario</h2>
+<table>
+  <tr><th style="width:24%">Término</th><th>Qué significa aquí</th></tr>
+  <tr><td><b>PWA</b></td><td>Aplicación web que se instala en el celular como si fuera una app, sin pasar por App Store ni Google Play.</td></tr>
+  <tr><td><b>Folio</b></td><td>Número correlativo único del envío. Es el identificador con que se busca y se reclama.</td></tr>
+  <tr><td><b>QR</b></td><td>Cuadrado con puntos que la cámara del celular lee y convierte en un enlace o un texto.</td></tr>
+  <tr><td><b>Enlace universal</b></td><td>Dirección web que, al abrirse en el celular, salta directo a la app correspondiente (Maps, Waze) si está instalada.</td></tr>
+  <tr><td><b>Geocodificar</b></td><td>Convertir una dirección escrita en coordenadas exactas de latitud y longitud.</td></tr>
+  <tr><td><b>EXIF</b></td><td>Datos ocultos que la cámara incrusta en la foto, incluida la ubicación GPS de dónde se tomó.</td></tr>
+  <tr><td><b>DTE</b></td><td>Documento Tributario Electrónico (boleta o factura del SII). <b>El ticket de este sistema no lo es.</b></td></tr>
+  <tr><td><b>Multi-tenant</b></td><td>Un mismo sistema sirviendo a varios negocios con sus datos completamente separados.</td></tr>
+  <tr><td><b>Alcance</b></td><td>La lista exacta de lo que el sistema va a hacer. Todo lo que no está en el alcance, no está en el precio.</td></tr>
+</table>
+
+<div class="caja" style="margin-top:22px">
+  <div class="titulo">Control de versiones de este documento</div>
+  <b>v1.0</b> — 18/09/2026 — Versión inicial para revisión del cliente.<br>
+  Cuando lleguen las respuestas del cuestionario, se emite la <b>v2.0</b> con el alcance cerrado,
+  los supuestos reemplazados por decisiones y la estimación convertida en cotización.
+</div>
+
+</body>
+</html>
