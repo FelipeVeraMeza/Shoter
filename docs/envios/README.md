@@ -3,11 +3,11 @@
 Esta carpeta **no forma parte del juego Shoter**. Contiene el documento de alcance y el
 cuestionario para el cliente de una aplicación aparte: gestión de envíos con sesión,
 dirección, producto, foto, comuna, ticket con QR, apertura de mapas y registro de
-ganancias.
+ganancias. La página está pensada **para usarse en el teléfono**, en la calle.
 
 | Archivo | Qué es |
 |---------|--------|
-| `ESPECIFICACION_APP_ENVIOS.pdf` | El documento para enviar al cliente (28 páginas) |
+| `ESPECIFICACION_APP_ENVIOS.pdf` | El documento para enviar al cliente (28 páginas, 30 preguntas al final) |
 | `especificacion_app_envios.html` | La fuente del PDF; se edita este archivo |
 
 ## Regenerar el PDF
@@ -21,5 +21,5 @@ python3 -c "from weasyprint import HTML; HTML('especificacion_app_envios.html').
 ## Estado
 
 Versión 1.0 — borrador. El alcance **no está cerrado**: depende de las respuestas del
-cuestionario (sección 13 del PDF), en especial de la pregunta D-0 (si «mps» es Maps o
-Mercado Pago) y del bloque A.
+30 preguntas de la sección 14 del PDF, en especial de la P-01 (si «mps» es Maps o
+Mercado Pago) y del resto del bloque A.
