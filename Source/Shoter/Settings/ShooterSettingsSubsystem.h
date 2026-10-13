@@ -122,6 +122,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Ajustes|Accesibilidad")
 	void SetCrosshairColor(FLinearColor Color);
 
+	// --- Interfaz ---
+
+	/** HUD realista (sin mira, minimapa ni munición exacta) o completo. */
+	UFUNCTION(BlueprintPure, Category = "Ajustes|Interfaz")
+	bool GetRealisticHUD() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Ajustes|Interfaz")
+	void SetRealisticHUD(bool bRealistic);
+
 	// --- Idioma (RNF-6.2, RNF-6.3) ---
 
 	/** Código de cultura activo ("es", "en"). */

@@ -46,7 +46,16 @@ private:
 	void DrawCrosshair(AShooterCharacter* Character);
 	void DrawHitMarker(AShooterPlayerController* Controller);
 	void DrawHealth(AShooterCharacter* Character);
-	void DrawAmmo(AShooterCharacter* Character);
+	void DrawAmmo(AShooterCharacter* Character, bool bRealistic);
+
+	/**
+	 * Resistencia, respiración, heridas y vendas. Se muestra en ambos modos:
+	 * en el realista es la única forma de saber que uno se desangra.
+	 */
+	void DrawStatus(AShooterCharacter* Character);
+
+	/** HUD realista según los ajustes del jugador. */
+	bool IsRealisticHUD() const;
 	void DrawMatchInfo();
 
 	/** Estado de las zonas de Dominación: quién controla cada una (RF-8.3). */

@@ -76,6 +76,14 @@ public:
 	bool bInvertY = false;
 
 	/**
+	 * HUD realista: sin mira, sin minimapa y sin contador de balas exacto.
+	 * Activo por defecto porque es la experiencia que define el juego; el
+	 * HUD completo queda para quien lo prefiera o esté aprendiendo.
+	 */
+	UPROPERTY(BlueprintReadWrite, Category = "Ajustes")
+	bool bRealisticHUD = true;
+
+	/**
 	 * Cultura elegida por el jugador ("es", "en"). Vacío significa "la del
 	 * sistema": así un perfil nuevo respeta el idioma de Steam o de Windows
 	 * en vez de imponer español (RNF-6.3).

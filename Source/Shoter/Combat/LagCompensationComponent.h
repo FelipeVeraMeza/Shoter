@@ -28,9 +28,32 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Compensación", meta = (ClampMin = "0.1"))
 	float MaxRecordTime = 1.f;
 
-	/** Altura relativa de la cápsula a partir de la cual un impacto cuenta como headshot. */
-	UPROPERTY(EditDefaultsOnly, Category = "Compensación", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float HeadshotHeightFraction = 0.82f;
+	/**
+	 * Radio de la cabeza, en cm.
+	 *
+	 * La cabeza se prueba como una esfera aparte y no como una franja de la
+	 * cápsula: la cápsula es mucho más ancha que un cráneo, y contar como
+	 * disparo a la cabeza todo lo que roza su parte alta premiaría la falta
+	 * de puntería.
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Compensación", meta = (ClampMin = "5.0"))
+	float HeadRadius = 13.f;
+
+	/** Por encima de esta altura relativa, un impacto en la cápsula que no tocó la cabeza es aire. */
+	UPROPERTY(EditDefaultsOnly, Category = "Compensación|Zonas", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float ShoulderHeightFraction = 0.84f;
+
+	/** Por debajo de esta altura, el impacto es en el abdomen. */
+	UPROPERTY(EditDefaultsOnly, Category = "Compensación|Zonas", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float ChestHeightFraction = 0.62f;
+
+	/** Por debajo de esta altura, el impacto es en las piernas. */
+	UPROPERTY(EditDefaultsOnly, Category = "Compensación|Zonas", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float WaistHeightFraction = 0.45f;
+
+	/** Distancia al eje, como fracción del radio, a partir de la cual el torso pasa a ser brazo. */
+	UPROPERTY(EditDefaultsOnly, Category = "Compensación|Zonas", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float ArmRadiusFraction = 0.62f;
 
 	/** Estado del personaje en un instante pasado, interpolado entre frames grabados. */
 	bool GetFrameAtTime(float WorldTime, FShooterFramePackage& OutFrame) const;
@@ -47,7 +70,7 @@ public:
 		const AActor* IgnoredActor,
 		AShooterCharacter*& OutHitCharacter,
 		FVector& OutImpactPoint,
-		bool& bOutHeadshot);
+		EShooterHitZone& OutZone);
 
 protected:
 	virtual void BeginPlay() override;
@@ -66,5 +89,18 @@ private:
 		const FShooterFramePackage& Frame,
 		FVector& OutImpactPoint,
 		float& OutDistanceAlongRay,
-		float& OutHeightFraction);
+		float& OutHeightFraction,
+		float& OutAxisDistanceFraction);
+
+	/**
+	 * Resuelve el impacto de un rayo contra un personaje rebobinado: primero
+	 * la cabeza, después el cuerpo por zonas.
+	 */
+	bool TraceAgainstFrame(
+		const FVector& RayStart,
+		const FVector& RayEnd,
+		const FShooterFramePackage& Frame,
+		FVector& OutImpactPoint,
+		float& OutDistanceAlongRay,
+		EShooterHitZone& OutZone) const;
 };

@@ -47,6 +47,24 @@ enum class EZoneState : uint8
 	Contested	UMETA(DisplayName = "Disputada")
 };
 
+/**
+ * Región del cuerpo alcanzada por un disparo.
+ *
+ * El daño realista depende de dónde entra la bala: la cabeza es letal, un
+ * brazo no. Se deduce de la cápsula rebobinada, no de la malla, porque el
+ * servidor no anima los esqueletos de los demás jugadores.
+ */
+UENUM(BlueprintType)
+enum class EShooterHitZone : uint8
+{
+	None		UMETA(DisplayName = "Ninguna"),
+	Head		UMETA(DisplayName = "Cabeza"),
+	Torso		UMETA(DisplayName = "Torso"),
+	Stomach		UMETA(DisplayName = "Abdomen"),
+	Arm			UMETA(DisplayName = "Brazo"),
+	Leg			UMETA(DisplayName = "Pierna")
+};
+
 /** Una eliminación, para el registro en pantalla (RF-7.7) y el aviso de muerte (RF-6.6). */
 USTRUCT(BlueprintType)
 struct FShooterKillEvent
@@ -90,4 +108,13 @@ struct FShooterFramePackage
 
 	UPROPERTY()
 	float CapsuleRadius = 42.f;
+
+	/**
+	 * Desplazamiento lateral de la cabeza al asomarse (inclinación).
+	 *
+	 * Sin él, quien se asoma tras una esquina tendría la cabeza fuera de la
+	 * cápsula: vería y dispararía sin poder recibir impactos.
+	 */
+	UPROPERTY()
+	FVector LeanOffset = FVector::ZeroVector;
 };

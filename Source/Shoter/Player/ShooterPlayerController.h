@@ -4,6 +4,8 @@
 #include "GameFramework/PlayerController.h"
 #include "ShooterPlayerController.generated.h"
 
+class USoundBase;
+
 UCLASS()
 class SHOTER_API AShooterPlayerController : public APlayerController
 {
@@ -19,6 +21,27 @@ public:
 	/** Aviso de daño recibido, para el indicador direccional del HUD. */
 	UFUNCTION(Client, Reliable)
 	void Client_NotifyDamageTaken(const FVector_NetQuantize& DamageSourceLocation);
+
+	/**
+	 * Una bala pasó cerca (supresión). Intensity va de 0 (a 3 m) a 1 (rozando).
+	 *
+	 * Unreliable: perder un aviso no cambia la partida, y bajo fuego intenso
+	 * llegan decenas por segundo.
+	 */
+	UFUNCTION(Client, Unreliable)
+	void Client_NotifySuppressed(const FVector_NetQuantize& BulletLocation, float Intensity);
+
+	/** Nivel de supresión actual, de 0 a 1. Lo usan la cámara y la puntería. */
+	UFUNCTION(BlueprintPure, Category = "HUD")
+	float GetSuppressionLevel() const { return SuppressionLevel; }
+
+	/** Chasquido de la bala al pasar cerca. Sin asignar, la supresión es solo visual. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Supresión")
+	TObjectPtr<USoundBase> NearMissSound;
+
+	/** Supresión que se disipa por segundo. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Supresión", meta = (ClampMin = "0.0"))
+	float SuppressionDecayRate = 0.45f;
 
 	/** Quién te eliminó y con qué, para mostrarlo al morir (RF-6.6). */
 	UFUNCTION(Client, Reliable)
@@ -117,6 +140,8 @@ private:
 	void UpdateKillCam(float DeltaSeconds);
 
 	void StopKillCam();
+
+	float SuppressionLevel = 0.f;
 
 	float LastHitConfirmedTime = -1000.f;
 	bool bLastHitWasHeadshot = false;

@@ -51,13 +51,23 @@ void AShooterHUD::DrawHUD()
 
 	DrawMatchInfo();
 
+	// En el modo realista la información sale del mundo, no de la pantalla:
+	// sin mira, sin minimapa y sin barra de vida. La salud se intuye por la
+	// visión (UpdateCameraEffects) y la munición, mirando el cargador.
+	const bool bRealistic = IsRealisticHUD();
+
 	if (Character && !Character->IsDead())
 	{
-		DrawCrosshair(Character);
-		DrawHealth(Character);
-		DrawAmmo(Character);
+		if (!bRealistic)
+		{
+			DrawCrosshair(Character);
+			DrawHealth(Character);
+			DrawMinimap(Character);
+		}
+
+		DrawAmmo(Character, bRealistic);
+		DrawStatus(Character);
 		DrawDamageIndicator(Character, ShooterPC);
-		DrawMinimap(Character);
 	}
 
 	DrawKillFeed();
@@ -67,7 +77,10 @@ void AShooterHUD::DrawHUD()
 
 	if (ShooterPC)
 	{
-		DrawHitMarker(ShooterPC);
+		if (!bRealistic)
+		{
+			DrawHitMarker(ShooterPC);
+		}
 		DrawRespawnCountdown(ShooterPC);
 	}
 
@@ -506,10 +519,58 @@ void AShooterHUD::DrawHealth(AShooterCharacter* Character)
 		X + BarWidth + 16.f, Y - 10.f, GEngine->GetLargeFont(), 1.2f);
 }
 
-void AShooterHUD::DrawAmmo(AShooterCharacter* Character)
+namespace
+{
+	FText FireModeName(EWeaponFireMode Mode)
+	{
+		switch (Mode)
+		{
+		case EWeaponFireMode::SemiAuto:	return LOCTEXT("FireModeSemi", "TIRO A TIRO");
+		case EWeaponFireMode::Burst:	return LOCTEXT("FireModeBurst", "RÁFAGA");
+		default:						return LOCTEXT("FireModeAuto", "AUTOMÁTICO");
+		}
+	}
+
+	/**
+	 * Lo que un soldado sabe de su cargador al sopesarlo: una estimación,
+	 * no un número exacto.
+	 */
+	FText MagazineEstimate(int32 Current, int32 Capacity)
+	{
+		const float Ratio = Capacity > 0 ? static_cast<float>(Current) / Capacity : 0.f;
+
+		if (Current <= 0)		return LOCTEXT("MagEmpty", "Vacío");
+		if (Ratio >= 0.9f)		return LOCTEXT("MagFull", "Lleno");
+		if (Ratio >= 0.6f)		return LOCTEXT("MagNearlyFull", "Casi lleno");
+		if (Ratio >= 0.35f)		return LOCTEXT("MagHalf", "Medio");
+		return LOCTEXT("MagNearlyEmpty", "Casi vacío");
+	}
+}
+
+bool AShooterHUD::IsRealisticHUD() const
+{
+	if (const UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (const UShooterSettingsSubsystem* Settings = GameInstance->GetSubsystem<UShooterSettingsSubsystem>())
+		{
+			return Settings->GetRealisticHUD();
+		}
+	}
+	return true;
+}
+
+void AShooterHUD::DrawAmmo(AShooterCharacter* Character, bool bRealistic)
 {
 	const AWeaponBase* Weapon = Character->GetCurrentWeapon();
 	if (!Weapon)
+	{
+		return;
+	}
+
+	// En modo realista el panel solo aparece al comprobar el cargador
+	// (pulsar recargar) o al recargar; el resto del tiempo, nada.
+	const float ShowSeconds = 2.5f;
+	if (bRealistic && !Weapon->IsReloading() && Weapon->GetTimeSinceAmmoCheck() > ShowSeconds)
 	{
 		return;
 	}
@@ -520,12 +581,14 @@ void AShooterHUD::DrawAmmo(AShooterCharacter* Character)
 
 	DrawPanel(this, X - 14.f, Y - 8.f, PanelWidth + 28.f, 78.f);
 
-	// Nombre del arma: útil al alternar entre primaria y secundaria.
+	// Nombre del arma y posición del selector.
 	const UWeaponDataAsset* Data = Weapon->WeaponData;
 	const FString WeaponName = (Data && !Data->DisplayName.IsEmpty())
 		? Data->DisplayName.ToString()
 		: LOCTEXT("WeaponFallback", "ARMA").ToString();
 	DrawText(WeaponName.ToUpper(), TextMuted, X, Y, GEngine->GetSmallFont(), 1.f);
+	DrawText(FireModeName(Weapon->GetCurrentFireMode()).ToString(), TextMuted,
+		X + PanelWidth - 96.f, Y, GEngine->GetSmallFont(), 1.f);
 
 	if (Weapon->IsReloading())
 	{
@@ -535,8 +598,29 @@ void AShooterHUD::DrawAmmo(AShooterCharacter* Character)
 	}
 
 	const int32 Current = Weapon->GetCurrentAmmo();
-	const int32 Reserve = Weapon->GetReserveAmmo();
-	const int32 Magazine = Data ? Data->MagazineSize : 30;
+	const int32 Magazine = Weapon->GetEffectiveMagazineSize();
+
+	// Los cargadores de reserva se cuentan en ambos modos: es lo que el
+	// jugador sabe palpando el chaleco.
+	int32 SpareCount = 0;
+	for (const int32 Rounds : Weapon->GetSpareMagazines())
+	{
+		SpareCount += Rounds > 0 ? 1 : 0;
+	}
+
+	FFormatNamedArguments MagArgs;
+	MagArgs.Add(TEXT("Count"), FText::AsNumber(SpareCount));
+	const FText SpareText = FText::Format(
+		LOCTEXT("SpareMagazines", "{Count} {Count}|plural(one=cargador,other=cargadores)"), MagArgs);
+
+	if (bRealistic)
+	{
+		const FLinearColor EstimateColor = Current > 0 ? TextPrimary : AccentLow;
+		DrawText(MagazineEstimate(Current, Magazine).ToString(), EstimateColor,
+			X, Y + 20.f, GEngine->GetMediumFont(), 1.3f);
+		DrawText(SpareText.ToString(), TextMuted, X, Y + 48.f, GEngine->GetSmallFont(), 1.f);
+		return;
+	}
 
 	// El cargador se tiñe cuando queda poco: avisa antes de quedarse seco.
 	const float MagazinePercent = Magazine > 0 ? static_cast<float>(Current) / Magazine : 0.f;
@@ -549,13 +633,10 @@ void AShooterHUD::DrawAmmo(AShooterCharacter* Character)
 
 	const float CurrentWidth = Current >= 10 ? 46.f : 26.f;
 	DrawText(FText::Format(LOCTEXT("AmmoReserve", "/ {Reserve}"),
-		FFormatNamedArguments{ { TEXT("Reserve"), FText::AsNumber(Reserve) } }).ToString(),
+		FFormatNamedArguments{ { TEXT("Reserve"), FText::AsNumber(Weapon->GetReserveAmmo()) } }).ToString(),
 		TextMuted, X + CurrentWidth, Y + 36.f, GEngine->GetMediumFont(), 1.f);
 
-	if (Current <= 0)
-	{
-		DrawText(LOCTEXT("PressReload", "PULSA R").ToString(), AccentLow, X + 140.f, Y + 34.f, GEngine->GetSmallFont(), 1.1f);
-	}
+	DrawText(SpareText.ToString(), TextMuted, X + 140.f, Y + 40.f, GEngine->GetSmallFont(), 1.f);
 
 	// Granadas restantes (RF-5.11).
 	const int32 Grenades = Character->GetGrenadeCount();
@@ -564,7 +645,70 @@ void AShooterHUD::DrawAmmo(AShooterCharacter* Character)
 		// La "G" es la inicial de granada: el traductor necesita poder cambiarla.
 		DrawText(FText::Format(LOCTEXT("GrenadeCount", "G x{Count}"),
 			FFormatNamedArguments{ { TEXT("Count"), FText::AsNumber(Grenades) } }).ToString(),
-			TextMuted, X + PanelWidth - 54.f, Y + 4.f, GEngine->GetSmallFont(), 1.1f);
+			TextMuted, X + 140.f, Y + 22.f, GEngine->GetSmallFont(), 1.1f);
+	}
+}
+
+void AShooterHUD::DrawStatus(AShooterCharacter* Character)
+{
+	const UHealthComponent* Health = Character->GetHealthComponent();
+
+	const float X = 42.f;
+	float Y = Canvas->ClipY - (IsRealisticHUD() ? 40.f : 112.f);
+
+	const float BarWidth = 160.f;
+	const float BarHeight = 4.f;
+
+	// Resistencia: solo cuando falta, para no cargar la pantalla en reposo.
+	const float StaminaPercent = Character->GetStaminaPercent();
+	if (StaminaPercent < 0.98f)
+	{
+		DrawRect(FLinearColor(1.f, 1.f, 1.f, 0.10f), X, Y, BarWidth, BarHeight);
+		DrawRect(FLinearColor(0.85f, 0.88f, 0.92f, 0.75f), X, Y, BarWidth * StaminaPercent, BarHeight);
+		Y -= 10.f;
+	}
+
+	// Aliento: mientras se contiene, cuánto queda antes de que el pulso se dispare.
+	if (Character->IsHoldingBreath())
+	{
+		DrawRect(FLinearColor(1.f, 1.f, 1.f, 0.10f), X, Y, BarWidth, BarHeight);
+		DrawRect(FLinearColor(0.45f, 0.7f, 1.f, 0.85f), X, Y, BarWidth * Character->GetBreathPercent(), BarHeight);
+		Y -= 10.f;
+	}
+
+	if (!Health)
+	{
+		return;
+	}
+
+	TArray<TPair<FText, FLinearColor>> Lines;
+
+	if (Health->IsBandaging())
+	{
+		Lines.Emplace(LOCTEXT("Bandaging", "VENDANDO…"), FLinearColor(0.98f, 0.75f, 0.2f, 1.f));
+	}
+	else if (Health->GetBleedingWounds() > 0)
+	{
+		FFormatNamedArguments Args;
+		Args.Add(TEXT("Bandages"), FText::AsNumber(Health->GetBandageCount()));
+		const FText Text = Health->GetBandageCount() > 0
+			? FText::Format(LOCTEXT("BleedingWithBandages", "SANGRANDO · vendas: {Bandages}"), Args)
+			: LOCTEXT("BleedingNoBandages", "SANGRANDO · sin vendas");
+
+		// El aviso late para que se perciba sin leerlo.
+		const float Pulse = 0.65f + 0.35f * FMath::Sin(GetWorld()->GetTimeSeconds() * 6.f);
+		Lines.Emplace(Text, FLinearColor(AccentLow.R, AccentLow.G, AccentLow.B, Pulse));
+	}
+
+	if (Health->HasLegInjury())
+	{
+		Lines.Emplace(LOCTEXT("LegInjury", "PIERNA HERIDA"), FLinearColor(0.98f, 0.75f, 0.2f, 1.f));
+	}
+
+	for (const TPair<FText, FLinearColor>& Line : Lines)
+	{
+		Y -= 22.f;
+		DrawText(Line.Key.ToString(), Line.Value, X, Y, GEngine->GetSmallFont(), 1.2f);
 	}
 }
 

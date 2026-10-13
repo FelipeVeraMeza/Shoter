@@ -6,6 +6,7 @@
 #include "Engine/NetDriver.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Net/UnrealNetwork.h"
+#include "Kismet/GameplayStatics.h"
 
 AShooterPlayerController::AShooterPlayerController()
 {
@@ -19,6 +20,19 @@ void AShooterPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProper
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME_CONDITION(AShooterPlayerController, RespawnWorldTime, COND_OwnerOnly);
+}
+
+void AShooterPlayerController::Client_NotifySuppressed_Implementation(const FVector_NetQuantize& BulletLocation,
+	float Intensity)
+{
+	// Se acumula con techo: una ráfaga cercana pesa más que una bala suelta,
+	// pero nunca deja la pantalla inservible.
+	SuppressionLevel = FMath::Min(SuppressionLevel + FMath::Clamp(Intensity, 0.f, 1.f) * 0.5f, 1.f);
+
+	if (NearMissSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, NearMissSound, BulletLocation);
+	}
 }
 
 void AShooterPlayerController::Client_NotifyHitConfirmed_Implementation(bool bHeadshot)
@@ -148,6 +162,11 @@ void AShooterPlayerController::StopKillCam()
 void AShooterPlayerController::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+
+	if (SuppressionLevel > 0.f)
+	{
+		SuppressionLevel = FMath::Max(SuppressionLevel - SuppressionDecayRate * DeltaSeconds, 0.f);
+	}
 
 	// La killcam corre en el cliente que murió, mientras espera reaparecer.
 	if (bKillCamActive)

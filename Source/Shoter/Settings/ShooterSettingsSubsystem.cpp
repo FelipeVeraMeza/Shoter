@@ -499,6 +499,27 @@ void UShooterSettingsSubsystem::SetCrosshairColor(FLinearColor Color)
 	SaveProfile();
 }
 
+bool UShooterSettingsSubsystem::GetRealisticHUD() const
+{
+	const UShooterProgressionSubsystem* Progression = GetProgression();
+	const UShooterSaveGame* Save = Progression ? Progression->GetSaveData() : nullptr;
+
+	return Save ? Save->bRealisticHUD : true;
+}
+
+void UShooterSettingsSubsystem::SetRealisticHUD(bool bRealistic)
+{
+	UShooterProgressionSubsystem* Progression = GetProgression();
+	UShooterSaveGame* Save = Progression ? Progression->GetSaveData() : nullptr;
+	if (!Save)
+	{
+		return;
+	}
+
+	Save->bRealisticHUD = bRealistic;
+	SaveProfile();
+}
+
 void UShooterSettingsSubsystem::ApplyAndSave()
 {
 	if (UGameUserSettings* Settings = GEngine ? GEngine->GetGameUserSettings() : nullptr)

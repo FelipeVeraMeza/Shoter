@@ -344,6 +344,82 @@ de ejecutar y verificar en el editor.**
 
 ---
 
+## Fase 6 — Giro a shooter realista
+
+El juego deja de ser arcade. Detalle completo en [REALISMO.md](REALISMO.md).
+
+| Sistema | Clase | Qué cambia |
+|---|---|---|
+| Balística | `UShooterBallisticsSubsystem` | Balas simuladas: caída, tiempo de vuelo, penetración, supresión |
+| Superficies | `UShooterPhysicalMaterial` | Resistencia balística por material |
+| Zonas de impacto | `ULagCompensationComponent` | Cabeza como esfera; torso, abdomen, brazos, piernas |
+| Heridas | `UHealthComponent` | Sin regeneración; hemorragia, cojera, vendas, caídas |
+| Movimiento | `AShooterCharacter` | Inercia, resistencia, inclinación, balanceo, respiración |
+| Armas | `AWeaponBase` | Cargadores reales, recámara, selector de fuego, puesta a cero |
+| HUD | `AShooterHUD` | Modo realista sin mira ni munición exacta |
+| Mapa | `build_realistic_map.py` | `Lvl_Distrito`: barrio de 160 × 120 m con tres carriles |
+
+### Decisiones
+
+**El retroceso y el balanceo escriben la rotación de control directamente**,
+no con `AddControllerPitchInput`. Esa vía multiplica por las escalas de
+entrada heredadas del motor (±2,5), así que los grados del DataAsset no eran
+grados. Ojo: el retroceso de los DataAssets antiguos se percibirá ~2,5 veces
+menor; `build_realistic_map.py` ya escribe valores nuevos.
+
+**El desfase de rebobinado es constante durante el vuelo de la bala.** El
+tirador vio a los demás con ese retraso; una bala que tarda 0,3 s debe
+encontrarlos donde él los vería 0,3 s después, no donde estaban al disparar.
+
+**La bala guarda una copia del modelo de daño, no el arma.** Al morir, el
+arma se destruye; los disparos simultáneos deben contar igual.
+
+**La cabeza es una esfera, no una franja de la cápsula.** La cápsula mide
+84 cm de ancho: contar como disparo a la cabeza todo lo que rozaba su parte
+alta premiaba fallar.
+
+**La inclinación desplaza la cabeza también en el servidor.** Sin eso, quien
+se asoma tras una esquina vería y dispararía con la cabeza fuera de su
+cápsula, sin poder recibir impactos.
+
+### Un error de enlazado
+
+`UPhysicalMaterial` vive en el módulo `PhysicsCore`, no en `Engine`. Compiló
+sin problemas y falló al enlazar con nueve símbolos sin resolver. Añadido a
+`Shoter.Build.cs`.
+
+### La causa real del bug de WASD
+
+`IA_Move` sí era Axis2D. El fallo estaba en los **modificadores**:
+`unreal.InputModifierSwizzleAxis()` crea el objeto en el paquete
+transitorio, y al guardar `IMC_Combate` la referencia se descarta sin aviso.
+El contexto quedaba con W, A, S y D sin modificadores: las cuatro daban
+(1, 0). Encima, `BP_Jugador` cargaba también `IMC_Default` de la plantilla,
+que mapea `IA_Move` a las mismas teclas, y ambos se pisaban.
+
+Solución en `build_realistic_map.py`: los modificadores se crean con
+`unreal.new_object(..., outer=context)`, el contexto se reconstruye entero y
+el personaje usa solo `IMC_Combate`. El script relee lo guardado y lo deja en
+el log (`W -> 1 modificadores en ['IMC_Combate']`).
+
+**Lección:** en Python de Unreal, todo subobjeto que vaya dentro de un asset
+necesita el asset como *outer*.
+
+### Navegación de los bots
+
+El volumen de navegación se colocaba, pero el editor guardaba el nivel antes
+de terminar de construir la malla: los bots no podían moverse. Ahora la malla
+se genera al cargar el nivel (`RuntimeGeneration=Dynamic`).
+
+### Lo que el código no resuelve
+
+El mapa usa materiales procedurales: coherentes, pero no fotorrealistas. El
+salto visual exige importar materiales de Fab/Megascans (gratuitos); el
+script los detecta y los usa si están. Personajes, animaciones y sonido de
+armas siguen siendo los de la plantilla.
+
+---
+
 ## Cómo retomar el proyecto
 
 1. Abrir `Shoter.uproject` (compila el C++ al arrancar)

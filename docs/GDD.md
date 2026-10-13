@@ -6,13 +6,13 @@
 | Campo | Valor |
 |-------|-------|
 | **Título provisional** | ShooterGame |
-| **Género** | FPS arcade de acción, multijugador |
+| **Género** | FPS táctico realista, multijugador |
 | **Motor** | Unreal Engine 5.3+ |
 | **Plataforma v1.0** | PC (Windows 10/11) vía Steam |
 | **Jugadores** | 1–10 según modo (online) |
 | **Modelo de negocio** | Premium (pago único) — ver §8 |
 | **Clasificación objetivo** | ESRB Teen / PEGI 16 |
-| **Duración de partida** | 5–8 minutos |
+| **Duración de partida** | 10–15 minutos |
 
 ---
 
@@ -21,9 +21,10 @@
 Los cuatro pilares son el criterio para aceptar o rechazar cualquier feature.
 Si una idea no refuerza un pilar, no entra.
 
-1. **El disparo se siente contundente.** Respuesta inmediata, retroceso visible,
-   audio con peso, feedback claro de impacto. El *game feel* del arma es la
-   feature número uno del juego.
+1. **Cada bala cuenta.** Balística real (caída, tiempo de vuelo, penetración),
+   daño por zona del cuerpo y pocas balas para matar o morir. El posicionamiento
+   y la cobertura deciden más que los reflejos. Detalle en
+   [REALISMO.md](REALISMO.md).
 2. **Partidas cortas y rejugables.** Entrar y estar disparando en menos de 60
    segundos. Nada de partidas de 30 minutos.
 3. **Fácil de aprender, difícil de dominar.** Controles estándar del género, sin
@@ -79,16 +80,22 @@ probar la nueva configuración.
 | Saltar | `Espacio` | 420 cm de impulso |
 | Deslizarse (slide) | `Ctrl` corriendo | 900 cm/s inicial, 0.6 s |
 
-- Sin aceleración/desaceleración pesada: el arcade exige respuesta inmediata.
-- **No hay caída de daño** por altura (decisión arcade, evita frustración).
-- El sprint desactiva el disparo; volver a disparar toma 0.2 s ("sprint-out time").
+> **Revisado (octubre 2026):** el juego pasa a ser realista. Los valores
+> vigentes están en [REALISMO.md](REALISMO.md): andar 360 cm/s, correr 590
+> solo hacia delante, inercia de 1400 cm/s², resistencia limitada, inclinación
+> con Q/E y sin deslizamiento.
+
+- Inercia de persona equipada: arrancar y frenar llevan unos pasos.
+- **Hay daño por caída** desde unos 6 m; desde 20 m es mortal.
+- El sprint desactiva el disparo; volver a disparar toma 0,25 s ("sprint-out time").
 
 ### 3.2 Salud
 
 - **Salud base:** 100 HP. Sin escudos ni armadura en v1.0.
-- **Regeneración:** empieza tras 5 s sin recibir daño, a 25 HP/s.
-- Decisión: regeneración (no botiquines) porque mantiene el ritmo alto y elimina
-  la necesidad de gestionar objetos.
+- **Sin regeneración.** Las heridas sangran y se vendan (2 vendas por vida);
+  un disparo en la pierna hace cojear.
+- Decisión revisada: la regeneración mantenía el ritmo arcade, pero anula la
+  consecuencia de cada impacto, que es el núcleo de un shooter realista.
 
 ---
 
@@ -125,8 +132,9 @@ balance vive hardcodeado en C++.**
 | 7 | Rifle de tirador | Semiauto | Larga distancia, 2 impactos | ~500 ms |
 | 8 | Francotirador | Cerrojo | Larga, un disparo a la cabeza = muerte | ~1 disparo |
 
-**TTK global objetivo: 300–500 ms.** Más rápido se siente injusto ("morí sin
-reaccionar"); más lento rompe el pilar arcade.
+**TTK revisado para el modo realista:** el fusil mata con 3 impactos al torso
+o 1 a la cabeza (~160 ms a 750 RPM). Lo que evita el "morí sin reaccionar" ya
+no es un TTK largo sino la información: supresión, sonido y cobertura.
 
 ### 4.3 Accesorios
 
@@ -209,14 +217,16 @@ dividir la población de un juego pequeño lo mata).
 
 ## 9️⃣ DIRECCIÓN DE ARTE Y AUDIO
 
-**Arte: estilizado, no realista.** Materiales limpios, paleta saturada, siluetas
-legibles. Decisión práctica y deliberada:
+**Arte: realista (decisión revisada en octubre de 2026).** Antes era
+estilizado. El argumento contra el realismo —competir con estudios de 200
+personas— sigue siendo un riesgo, y se mitiga así:
 
-- El realismo compite directamente con estudios de 200 personas — es una batalla
-  perdida para un equipo pequeño.
-- El estilizado envejece mucho mejor.
-- La legibilidad (distinguir enemigo de fondo al instante) es un requisito
-  *competitivo*, no estético.
+- Materiales fotoescaneados gratuitos de **Fab/Megascans** en lugar de
+  producir texturas propias. El mapa funciona con materiales procedurales
+  mientras tanto.
+- Lumen, sombras virtuales y Nanite dan iluminación realista sin hornear luces.
+- La legibilidad sigue siendo un requisito *competitivo*: los personajes deben
+  destacar del entorno aunque el entorno sea realista.
 
 **Contraste obligatorio:** los personajes deben destacar del entorno. Entornos
 desaturados, personajes saturados, equipos con colores claramente opuestos.

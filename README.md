@@ -1,6 +1,6 @@
 # 🎯 Shoter
 
-FPS arcade multijugador en **Unreal Engine 5.8** (C++), para PC vía Steam.
+FPS táctico realista multijugador en **Unreal Engine 5.8** (C++), para PC vía Steam.
 
 > **Estado actual:** sistemas de combate multijugador implementados en C++ (red
 > autoritativa, compensación de latencia, armas por datos, reglas de partida y HUD),
@@ -19,6 +19,7 @@ FPS arcade multijugador en **Unreal Engine 5.8** (C++), para PC vía Steam.
 | [**PLANIFICACION.md**](docs/PLANIFICACION.md) | Fases, sprints, hitos, riesgos, presupuesto y marketing |
 | [**ZONA_ENTRENAMIENTO.md**](docs/ZONA_ENTRENAMIENTO.md) | Nivel de pruebas: cómo generarlo y qué validar en él |
 | [**SISTEMAS.md**](docs/SISTEMAS.md) | Los subsistemas de C++: qué hace cada uno y cómo usarlo |
+| [**REALISMO.md**](docs/REALISMO.md) | Balística, heridas, puntería, HUD realista y el mapa Distrito |
 | [**TRAZABILIDAD.md**](docs/TRAZABILIDAD.md) | Los 152 requerimientos contra el código, con su estado real |
 | [**BITACORA.md**](docs/BITACORA.md) | Historia del proyecto: decisiones, errores y cómo se resolvieron |
 
@@ -129,9 +130,13 @@ funciona.
 | Mirar | Mouse |
 | Disparar | Click izquierdo |
 | Apuntar | Click derecho |
-| Recargar | `R` |
-| Cambiar arma | `Q` / rueda del mouse |
-| Correr | `Shift` |
+| Recargar / comprobar cargador | `R` |
+| Cambiar arma | `1` / rueda del mouse |
+| Correr (apuntando: contener la respiración) | `Shift` |
+| Asomarse | `Q` / `E` |
+| Selector de fuego | `B` |
+| Vendarse | `H` |
+| Granada | `G` |
 | Agacharse | `Ctrl` |
 | Saltar | `Espacio` |
 

@@ -3,7 +3,8 @@
 #include "Curves/CurveFloat.h"
 #include "Player/ShooterCharacter.h"
 #include "Player/ShooterPlayerController.h"
-#include "Combat/LagCompensationComponent.h"
+#include "Combat/ShooterBallisticsSubsystem.h"
+#include "Combat/ShooterPhysicalMaterial.h"
 #include "Progression/ShooterProgressionSubsystem.h"
 #include "Engine/GameInstance.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -12,8 +13,24 @@
 #include "Kismet/GameplayStatics.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Net/UnrealNetwork.h"
-#include "EngineUtils.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "TimerManager.h"
+
+float FShooterDamageModel::GetDamage(float Distance, EShooterHitZone Zone) const
+{
+	const UWeaponDataAsset* WeaponData = Data.Get();
+	if (!WeaponData)
+	{
+		return 0.f;
+	}
+
+	// El accesorio de cañón alarga el alcance efectivo, así que la caída se
+	// evalúa sobre la distancia corregida antes de escalar el daño.
+	const float AdjustedDistance = (RangeMultiplier > 0.f) ? Distance / RangeMultiplier : Distance;
+
+	return WeaponData->GetDamageAtDistance(AdjustedDistance) * DamageMultiplier
+		* WeaponData->GetZoneMultiplier(Zone);
+}
 
 AWeaponBase::AWeaponBase()
 {
@@ -25,6 +42,11 @@ AWeaponBase::AWeaponBase()
 	RootComponent = WeaponMesh;
 	WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	WeaponMesh->SetCastShadow(false);
+
+	// La munición y el selector cambian a ritmo humano: no hace falta
+	// replicar el arma a la frecuencia del personaje.
+	SetNetUpdateFrequency(20.f);
+	SetMinNetUpdateFrequency(2.f);
 }
 
 void AWeaponBase::BeginPlay()
@@ -40,8 +62,9 @@ void AWeaponBase::BeginPlay()
 
 		if (HasAuthority())
 		{
-			CurrentAmmo = GetEffectiveMagazineSize();
-			ReserveAmmo = WeaponData->MaxReserveAmmo;
+			CurrentFireMode = WeaponData->GetFireModes()[0];
+			CurrentAmmo = GetEffectiveMagazineSize() + (WeaponData->bClosedBolt ? 1 : 0);
+			RefillMagazines();
 		}
 	}
 }
@@ -54,6 +77,10 @@ void AWeaponBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 	DOREPLIFETIME(AWeaponBase, ReserveAmmo);
 	DOREPLIFETIME(AWeaponBase, bIsReloading);
 	DOREPLIFETIME(AWeaponBase, Attachments);
+	DOREPLIFETIME(AWeaponBase, CurrentFireMode);
+
+	// El detalle de cada cargador solo le importa a quien lo lleva.
+	DOREPLIFETIME_CONDITION(AWeaponBase, SpareMagazines, COND_OwnerOnly);
 }
 
 void AWeaponBase::SetOwningCharacter(AShooterCharacter* InCharacter)
@@ -72,11 +99,102 @@ void AWeaponBase::ResetAmmo()
 	// Cancela también una recarga en curso: el reinicio debe ser instantáneo.
 	GetWorldTimerManager().ClearTimer(ReloadTimerHandle);
 
-	CurrentAmmo = GetEffectiveMagazineSize();
-	ReserveAmmo = WeaponData->MaxReserveAmmo;
+	CurrentAmmo = GetEffectiveMagazineSize() + (WeaponData->bClosedBolt ? 1 : 0);
+	RefillMagazines();
 	bIsReloading = false;
 	ConsecutiveShots = 0;
 	AccumulatedSpread = 0.f;
+}
+
+void AWeaponBase::RefillMagazines()
+{
+	SpareMagazines.Reset();
+
+	if (!WeaponData)
+	{
+		UpdateReserveAmmo();
+		return;
+	}
+
+	// La reserva se expresa en cargadores llenos: la munición suelta no
+	// existe en el bolsillo de un soldado.
+	const int32 MagazineSize = GetEffectiveMagazineSize();
+	int32 Remaining = WeaponData->MaxReserveAmmo;
+	while (Remaining > 0)
+	{
+		const int32 Rounds = FMath::Min(Remaining, MagazineSize);
+		SpareMagazines.Add(Rounds);
+		Remaining -= Rounds;
+	}
+
+	UpdateReserveAmmo();
+}
+
+void AWeaponBase::UpdateReserveAmmo()
+{
+	int32 Total = 0;
+	for (const int32 Rounds : SpareMagazines)
+	{
+		Total += Rounds;
+	}
+	ReserveAmmo = Total;
+}
+
+int32 AWeaponBase::FindFullestMagazine() const
+{
+	int32 BestIndex = INDEX_NONE;
+	int32 BestRounds = 0;
+
+	for (int32 Index = 0; Index < SpareMagazines.Num(); ++Index)
+	{
+		if (SpareMagazines[Index] > BestRounds)
+		{
+			BestRounds = SpareMagazines[Index];
+			BestIndex = Index;
+		}
+	}
+
+	return BestIndex;
+}
+
+float AWeaponBase::GetTimeSinceAmmoCheck() const
+{
+	return GetWorld() ? GetWorld()->GetTimeSeconds() - LastAmmoCheckTime : 1000.f;
+}
+
+void AWeaponBase::CycleFireMode()
+{
+	if (!WeaponData || bIsReloading)
+	{
+		return;
+	}
+
+	const TArray<EWeaponFireMode> Modes = WeaponData->GetFireModes();
+	if (Modes.Num() < 2)
+	{
+		return;
+	}
+
+	const int32 CurrentIndex = Modes.Find(CurrentFireMode);
+	const EWeaponFireMode NextMode = Modes[(CurrentIndex + 1) % Modes.Num()];
+
+	// Predicción local: el cambio se nota al instante.
+	CurrentFireMode = NextMode;
+	StopFire();
+
+	if (!HasAuthority())
+	{
+		Server_SetFireMode(NextMode);
+	}
+}
+
+void AWeaponBase::Server_SetFireMode_Implementation(EWeaponFireMode NewMode)
+{
+	// Solo se aceptan posiciones que el arma tenga de verdad.
+	if (WeaponData && WeaponData->GetFireModes().Contains(NewMode))
+	{
+		CurrentFireMode = NewMode;
+	}
 }
 
 void AWeaponBase::Tick(float DeltaSeconds)
@@ -93,7 +211,7 @@ void AWeaponBase::Tick(float DeltaSeconds)
 		return;
 	}
 
-	if (bWantsToFire && WeaponData && WeaponData->FireMode == EWeaponFireMode::Automatic && CanFire())
+	if (bWantsToFire && WeaponData && CurrentFireMode == EWeaponFireMode::Automatic && CanFire())
 	{
 		FireOnce();
 	}
@@ -102,6 +220,12 @@ void AWeaponBase::Tick(float DeltaSeconds)
 bool AWeaponBase::CanFire() const
 {
 	if (!WeaponData || bIsReloading || !OwningCharacter || OwningCharacter->IsDead())
+	{
+		return false;
+	}
+
+	// Al salir del sprint el arma tarda en volver a la posición de tiro.
+	if (!OwningCharacter->IsWeaponReady())
 	{
 		return false;
 	}
@@ -139,7 +263,7 @@ void AWeaponBase::TryStartFire()
 		return;
 	}
 
-	if (WeaponData->FireMode == EWeaponFireMode::Burst)
+	if (CurrentFireMode == EWeaponFireMode::Burst)
 	{
 		ShotsInCurrentBurst = 0;
 		ContinueBurst();
@@ -180,12 +304,33 @@ float AWeaponBase::GetCurrentSpreadDegrees() const
 	}
 
 	const bool bAiming = OwningCharacter && OwningCharacter->IsAiming();
-	const float BaseSpread = bAiming ? WeaponData->SpreadADS : WeaponData->SpreadHip;
+	float BaseSpread = bAiming ? WeaponData->SpreadADS : WeaponData->SpreadHip;
+
+	// Postura y movimiento: disparar corriendo desde la cadera es casi a
+	// ciegas; agachado, el arma se apoya y se estabiliza.
+	if (OwningCharacter)
+	{
+		const UCharacterMovementComponent* Movement = OwningCharacter->GetCharacterMovement();
+		const float Speed = OwningCharacter->GetVelocity().Size2D();
+		const float SpeedFraction = FMath::Clamp(Speed / FMath::Max(OwningCharacter->WalkSpeed, 1.f), 0.f, 1.5f);
+
+		BaseSpread *= 1.f + SpeedFraction * (bAiming ? 0.6f : 1.2f);
+
+		if (Movement && Movement->IsFalling())
+		{
+			BaseSpread *= 2.5f;
+		}
+		else if (OwningCharacter->bIsCrouched)
+		{
+			BaseSpread *= 0.75f;
+		}
+	}
 
 	// El accesorio escala también el tope, o una mira precisa quedaría anulada
-	// por el límite del arma en cuanto se disparara en ráfaga.
+	// por el límite del arma en cuanto se disparara en ráfaga. El tope se
+	// duplica porque el movimiento puede superar la dispersión de ráfaga.
 	const float Multiplier = Attachments.GetSpreadMultiplier();
-	const float Capped = FMath::Min(BaseSpread + AccumulatedSpread, WeaponData->SpreadMax);
+	const float Capped = FMath::Min(BaseSpread + AccumulatedSpread, WeaponData->SpreadMax * 2.f);
 
 	return Capped * Multiplier;
 }
@@ -219,17 +364,23 @@ float AWeaponBase::GetEffectiveADSTime() const
 
 float AWeaponBase::GetEffectiveDamageAtDistance(float Distance) const
 {
-	if (!WeaponData)
+	return MakeDamageSnapshot().GetDamage(Distance, EShooterHitZone::Torso);
+}
+
+FShooterDamageModel AWeaponBase::MakeDamageSnapshot() const
+{
+	FShooterDamageModel Model;
+	Model.Data = WeaponData.Get();
+	Model.DamageMultiplier = Attachments.GetDamageMultiplier();
+	Model.RangeMultiplier = Attachments.GetEffectiveRangeMultiplier();
+
+	if (WeaponData)
 	{
-		return 0.f;
+		Model.Range = WeaponData->Range;
+		Model.VelocityDecayDistance = WeaponData->VelocityDecayDistance;
 	}
 
-	// El accesorio de cañón alarga el alcance efectivo, así que la caída se
-	// evalúa sobre la distancia corregida antes de escalar el daño.
-	const float RangeMultiplier = Attachments.GetEffectiveRangeMultiplier();
-	const float AdjustedDistance = (RangeMultiplier > 0.f) ? Distance / RangeMultiplier : Distance;
-
-	return WeaponData->GetDamageAtDistance(AdjustedDistance) * Attachments.GetDamageMultiplier();
+	return Model;
 }
 
 void AWeaponBase::SetAttachments(const FWeaponAttachmentSet& NewAttachments)
@@ -247,7 +398,8 @@ void AWeaponBase::OnRep_Attachments()
 {
 	// Un cargador ampliado se nota de inmediato; uno reducido no descarta
 	// balas ya cargadas, solo limita las futuras recargas.
-	CurrentAmmo = FMath::Min(CurrentAmmo, GetEffectiveMagazineSize());
+	const int32 Chambered = (WeaponData && WeaponData->bClosedBolt) ? 1 : 0;
+	CurrentAmmo = FMath::Min(CurrentAmmo, GetEffectiveMagazineSize() + Chambered);
 }
 
 FVector AWeaponBase::CalculateShotDirection(const FVector& AimDirection) const
@@ -259,6 +411,32 @@ FVector AWeaponBase::CalculateShotDirection(const FVector& AimDirection) const
 	}
 
 	return FMath::VRandCone(AimDirection, FMath::DegreesToRadians(SpreadDegrees));
+}
+
+FVector AWeaponBase::ApplyZeroing(const FVector& Direction) const
+{
+	if (!WeaponData || !WeaponData->bUseBallistics)
+	{
+		return Direction;
+	}
+
+	const float GravityZ = GetWorld() ? GetWorld()->GetGravityZ() : -980.f;
+	const float Elevation = UShooterBallisticsSubsystem::ComputeZeroingAngle(WeaponData->MuzzleVelocity,
+		WeaponData->VelocityDecayDistance, WeaponData->ZeroingDistance, GravityZ);
+
+	if (FMath::IsNearlyZero(Elevation))
+	{
+		return Direction;
+	}
+
+	// Se eleva sobre el eje lateral del disparo: vale igual mirando arriba o abajo.
+	const FVector Right = FVector::CrossProduct(FVector::UpVector, Direction).GetSafeNormal();
+	if (Right.IsNearlyZero())
+	{
+		return Direction;
+	}
+
+	return Direction.RotateAngleAxis(-Elevation, Right);
 }
 
 void AWeaponBase::FireOnce()
@@ -277,7 +455,7 @@ void AWeaponBase::FireOnce()
 	LastFireTime = GetWorld()->GetTimeSeconds();
 
 	const FVector TraceStart = Camera->GetComponentLocation();
-	const FVector ShotDirection = CalculateShotDirection(Camera->GetForwardVector());
+	const FVector ShotDirection = ApplyZeroing(CalculateShotDirection(Camera->GetForwardVector()));
 
 	AccumulatedSpread = FMath::Min(AccumulatedSpread + WeaponData->SpreadPerShot, WeaponData->SpreadMax);
 	++ConsecutiveShots;
@@ -331,11 +509,18 @@ void AWeaponBase::ApplyRecoilToOwner()
 		? WeaponData->RecoilHorizontal->GetFloatValue(ShotIndex)
 		: FMath::FRandRange(-WeaponData->BaseRecoilHorizontal, WeaponData->BaseRecoilHorizontal);
 
-	// La empuñadura reduce ambos ejes por igual (RF-5.10).
-	const float RecoilMultiplier = Attachments.GetRecoilMultiplier();
+	// La empuñadura reduce ambos ejes por igual (RF-5.10); agachado, el
+	// cuerpo absorbe parte del golpe.
+	float RecoilMultiplier = Attachments.GetRecoilMultiplier();
+	if (OwningCharacter->bIsCrouched)
+	{
+		RecoilMultiplier *= 0.8f;
+	}
 
-	OwningCharacter->AddControllerPitchInput(-Vertical * RecoilMultiplier);
-	OwningCharacter->AddControllerYawInput(Horizontal * RecoilMultiplier);
+	// El personaje reparte el golpe en unos milisegundos y recupera parte
+	// después: aplicarlo de golpe a la cámara se siente a salto, no a arma.
+	OwningCharacter->AddRecoil(Vertical * RecoilMultiplier, Horizontal * RecoilMultiplier,
+		WeaponData->RecoilRecoveryFraction);
 }
 
 void AWeaponBase::PlayLocalFireEffects()
@@ -357,11 +542,34 @@ void AWeaponBase::PlayLocalFireEffects()
 	}
 }
 
-void AWeaponBase::SpawnImpactEffect(const FVector& Location) const
+void AWeaponBase::SpawnImpactEffect(const FVector& Location, const FVector& Normal,
+	const UPhysicalMaterial* SurfaceMaterial) const
 {
-	if (WeaponData && WeaponData->ImpactEffect)
+	// Cada superficie suena y salta a su manera; el efecto del arma queda
+	// como respaldo para las que no tengan uno propio.
+	const UShooterPhysicalMaterial* Surface = Cast<UShooterPhysicalMaterial>(SurfaceMaterial);
+
+	UNiagaraSystem* Effect = (Surface && Surface->ImpactEffect)
+		? Surface->ImpactEffect.Get()
+		: (WeaponData ? WeaponData->ImpactEffect.Get() : nullptr);
+
+	if (Effect)
 	{
-		UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), WeaponData->ImpactEffect, Location);
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), Effect, Location, Normal.Rotation());
+	}
+
+	if (Surface && Surface->ImpactSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, Surface->ImpactSound, Location);
+	}
+}
+
+void AWeaponBase::BroadcastImpact(const FVector& Location, const FVector& Normal,
+	const UPhysicalMaterial* SurfaceMaterial)
+{
+	if (HasAuthority())
+	{
+		Multicast_PlayImpactEffect(Location, Normal, SurfaceMaterial);
 	}
 }
 
@@ -421,55 +629,26 @@ void AWeaponBase::Server_Fire_Implementation(const FVector_NetQuantize& TraceSta
 
 	CurrentAmmo = FMath::Max(CurrentAmmo - 1, 0);
 
-	const FVector Direction = ShotDirection.GetSafeNormal();
-	const FVector TraceEnd = TraceStart + Direction * WeaponData->Range;
-
-	// Trazado contra geometría estática: los personajes se resuelven aparte,
-	// con sus posiciones rebobinadas.
-	FCollisionQueryParams Params;
-	Params.AddIgnoredActor(this);
-	for (TActorIterator<AShooterCharacter> It(GetWorld()); It; ++It)
-	{
-		Params.AddIgnoredActor(*It);
-	}
-
-	FHitResult GeometryHit;
-	const bool bHitGeometry = GetWorld()->LineTraceSingleByChannel(GeometryHit, TraceStart, TraceEnd, ECC_Visibility, Params);
-	const float GeometryDistance = bHitGeometry ? GeometryHit.Distance : WeaponData->Range;
-
-	AShooterCharacter* HitCharacter = nullptr;
-	FVector CharacterImpact = FVector::ZeroVector;
-	bool bHeadshot = false;
-
-	const bool bHitCharacter = ULagCompensationComponent::FindBestCharacterHit(
-		GetWorld(), TraceStart, TraceEnd, GetRewindTimeForOwner(), OwningCharacter,
-		HitCharacter, CharacterImpact, bHeadshot);
-
-	const float CharacterDistance = bHitCharacter ? FVector::Dist(TraceStart, CharacterImpact) : TNumericLimits<float>::Max();
-
 	Multicast_PlayFireEffects();
 
-	if (bHitCharacter && CharacterDistance <= GeometryDistance)
+	UShooterBallisticsSubsystem* Ballistics = GetWorld()->GetSubsystem<UShooterBallisticsSubsystem>();
+	if (!Ballistics)
 	{
-		float FinalDamage = GetEffectiveDamageAtDistance(CharacterDistance);
-		if (bHeadshot)
-		{
-			FinalDamage *= WeaponData->HeadshotMultiplier;
-		}
-
-		AController* InstigatorController = OwningCharacter->GetController();
-		UGameplayStatics::ApplyDamage(HitCharacter, FinalDamage, InstigatorController, this, UDamageType::StaticClass());
-
-		if (AShooterPlayerController* ShooterPC = Cast<AShooterPlayerController>(InstigatorController))
-		{
-			ShooterPC->Client_NotifyHitConfirmed(bHeadshot);
-		}
-
-		Multicast_PlayImpactEffect(CharacterImpact);
+		return;
 	}
-	else if (bHitGeometry)
+
+	// Se pasa el desfase y no un instante fijo: una bala que vuela 0,3 s debe
+	// encontrar a los demás donde el tirador los vería en ese momento.
+	const float RewindOffset = GetWorld()->GetTimeSeconds() - GetRewindTimeForOwner();
+	const FVector Direction = ShotDirection.GetSafeNormal();
+
+	if (WeaponData->bUseBallistics)
 	{
-		Multicast_PlayImpactEffect(GeometryHit.ImpactPoint);
+		Ballistics->FireBullet(this, OwningCharacter, TraceStart, Direction, RewindOffset);
+	}
+	else
+	{
+		Ballistics->FireHitscan(this, OwningCharacter, TraceStart, Direction, RewindOffset);
 	}
 }
 
@@ -484,9 +663,10 @@ void AWeaponBase::Multicast_PlayFireEffects_Implementation()
 	PlayLocalFireEffects();
 }
 
-void AWeaponBase::Multicast_PlayImpactEffect_Implementation(const FVector_NetQuantize& ImpactLocation)
+void AWeaponBase::Multicast_PlayImpactEffect_Implementation(const FVector_NetQuantize& ImpactLocation,
+	const FVector_NetQuantizeNormal& ImpactNormal, const UPhysicalMaterial* SurfaceMaterial)
 {
-	SpawnImpactEffect(ImpactLocation);
+	SpawnImpactEffect(ImpactLocation, ImpactNormal, SurfaceMaterial);
 }
 
 void AWeaponBase::TryReload()
@@ -496,7 +676,20 @@ void AWeaponBase::TryReload()
 		return;
 	}
 
-	if (CurrentAmmo >= GetEffectiveMagazineSize() || ReserveAmmo <= 0)
+	// Pulsar recargar también es mirar el cargador: el HUD realista solo
+	// muestra la munición en ese momento.
+	LastAmmoCheckTime = GetWorld()->GetTimeSeconds();
+
+	const int32 Fullest = FindFullestMagazine();
+	if (Fullest == INDEX_NONE)
+	{
+		return;
+	}
+
+	// Cambiar a un cargador con menos balas de las que ya hay en el arma no
+	// tiene sentido: se trata como una simple comprobación.
+	const int32 Chambered = (WeaponData->bClosedBolt && CurrentAmmo > 0) ? 1 : 0;
+	if (SpareMagazines[Fullest] <= CurrentAmmo - Chambered)
 	{
 		return;
 	}
@@ -511,13 +704,24 @@ void AWeaponBase::TryReload()
 
 void AWeaponBase::Server_Reload_Implementation()
 {
-	if (!WeaponData || bIsReloading || CurrentAmmo >= GetEffectiveMagazineSize() || ReserveAmmo <= 0)
+	if (!WeaponData || bIsReloading)
 	{
 		return;
 	}
 
+	const int32 Fullest = FindFullestMagazine();
+	const int32 Chambered = (WeaponData->bClosedBolt && CurrentAmmo > 0) ? 1 : 0;
+	if (Fullest == INDEX_NONE || SpareMagazines[Fullest] <= CurrentAmmo - Chambered)
+	{
+		return;
+	}
+
+	// En vacío hay que montar el arma además de cambiar el cargador.
+	const float BaseTime = CurrentAmmo > 0 ? WeaponData->ReloadTime : WeaponData->GetEmptyReloadTime();
+	const float ReloadDuration = BaseTime * Attachments.GetReloadTimeMultiplier();
+
 	bIsReloading = true;
-	GetWorldTimerManager().SetTimer(ReloadTimerHandle, this, &AWeaponBase::FinishReload, GetEffectiveReloadTime(), false);
+	GetWorldTimerManager().SetTimer(ReloadTimerHandle, this, &AWeaponBase::FinishReload, ReloadDuration, false);
 }
 
 void AWeaponBase::FinishReload()
@@ -527,12 +731,28 @@ void AWeaponBase::FinishReload()
 		return;
 	}
 
-	const int32 Needed = GetEffectiveMagazineSize() - CurrentAmmo;
-	const int32 Taken = FMath::Min(Needed, ReserveAmmo);
-
-	CurrentAmmo += Taken;
-	ReserveAmmo -= Taken;
 	bIsReloading = false;
 	ConsecutiveShots = 0;
 	AccumulatedSpread = 0.f;
+
+	const int32 Fullest = FindFullestMagazine();
+	if (Fullest == INDEX_NONE)
+	{
+		return;
+	}
+
+	const int32 NewMagazine = SpareMagazines[Fullest];
+	SpareMagazines.RemoveAt(Fullest);
+
+	// Con cerrojo cerrado, la bala de la recámara se queda en el arma; el
+	// resto del cargador viejo vuelve a la bolsa: ni se pierde ni se suma.
+	const int32 Chambered = (WeaponData->bClosedBolt && CurrentAmmo > 0) ? 1 : 0;
+	const int32 OldMagazine = CurrentAmmo - Chambered;
+	if (OldMagazine > 0)
+	{
+		SpareMagazines.Add(OldMagazine);
+	}
+
+	CurrentAmmo = NewMagazine + Chambered;
+	UpdateReserveAmmo();
 }

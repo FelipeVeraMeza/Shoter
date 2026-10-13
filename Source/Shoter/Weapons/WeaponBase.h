@@ -10,6 +10,25 @@
 class UWeaponDataAsset;
 class USkeletalMeshComponent;
 class AShooterCharacter;
+class UPhysicalMaterial;
+
+/**
+ * Lo necesario para calcular el daño de un disparo, copiado del arma.
+ *
+ * Una bala simulada puede seguir en el aire cuando el arma ya no existe (el
+ * tirador murió): por eso no guarda el arma, sino su modelo de daño.
+ */
+struct SHOTER_API FShooterDamageModel
+{
+	TWeakObjectPtr<const UWeaponDataAsset> Data;
+	float DamageMultiplier = 1.f;
+	float RangeMultiplier = 1.f;
+	float Range = 15000.f;
+	float VelocityDecayDistance = 90000.f;
+
+	/** Daño a esa distancia y en esa zona, con caída y accesorios aplicados. */
+	float GetDamage(float Distance, EShooterHitZone Zone) const;
+};
 
 /**
  * Arma como actor replicado. El cliente predice los efectos cosméticos y el HUD,
@@ -57,6 +76,29 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Arma")
 	float GetEffectiveDamageAtDistance(float Distance) const;
 
+	/** Copia del modelo de daño actual, para las balas en vuelo. */
+	FShooterDamageModel MakeDamageSnapshot() const;
+
+	/** Solo servidor. Reproduce un impacto en todos los clientes. */
+	void BroadcastImpact(const FVector& Location, const FVector& Normal, const UPhysicalMaterial* SurfaceMaterial);
+
+	// --- Selector de fuego ---
+
+	UFUNCTION(BlueprintPure, Category = "Arma")
+	EWeaponFireMode GetCurrentFireMode() const { return CurrentFireMode; }
+
+	/** Pasa a la siguiente posición del selector que admita el arma. */
+	void CycleFireMode();
+
+	// --- Cargadores ---
+
+	/** Cargadores de reserva, con las balas que le quedan a cada uno. */
+	UFUNCTION(BlueprintPure, Category = "Arma")
+	const TArray<int32>& GetSpareMagazines() const { return SpareMagazines; }
+
+	/** Segundos desde que el jugador comprobó el cargador (para el HUD realista). */
+	float GetTimeSinceAmmoCheck() const;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Arma")
 	TObjectPtr<USkeletalMeshComponent> WeaponMesh;
 
@@ -99,11 +141,37 @@ private:
 	UPROPERTY()
 	TObjectPtr<AShooterCharacter> OwningCharacter;
 
+	/** Balas en el arma: cargador más la de la recámara. */
 	UPROPERTY(Replicated)
 	int32 CurrentAmmo = 0;
 
+	/** Suma de los cargadores de reserva, para el HUD y los bots. */
 	UPROPERTY(Replicated)
 	int32 ReserveAmmo = 0;
+
+	/**
+	 * Cargadores de reserva. Recargar no rellena el cargador de un fondo
+	 * común: se cambia por el más lleno, y el que se quita vuelve a la
+	 * bolsa con lo que le quedaba. Recargar tras dos disparos tiene un coste.
+	 */
+	UPROPERTY(Replicated)
+	TArray<int32> SpareMagazines;
+
+	UPROPERTY(Replicated)
+	EWeaponFireMode CurrentFireMode = EWeaponFireMode::Automatic;
+
+	float LastAmmoCheckTime = -1000.f;
+
+	/** Rellena los cargadores de reserva según MaxReserveAmmo. */
+	void RefillMagazines();
+
+	void UpdateReserveAmmo();
+
+	/** Índice del cargador de reserva más lleno, o INDEX_NONE. */
+	int32 FindFullestMagazine() const;
+
+	UFUNCTION(Server, Reliable)
+	void Server_SetFireMode(EWeaponFireMode NewMode);
 
 	UPROPERTY(Replicated)
 	bool bIsReloading = false;
@@ -129,7 +197,10 @@ private:
 	void FireOnce();
 	void ApplyRecoilToOwner();
 	void PlayLocalFireEffects();
-	void SpawnImpactEffect(const FVector& Location) const;
+	void SpawnImpactEffect(const FVector& Location, const FVector& Normal, const UPhysicalMaterial* SurfaceMaterial) const;
+
+	/** Dirección corregida por la puesta a cero de las miras. */
+	FVector ApplyZeroing(const FVector& Direction) const;
 
 	/** Dirección del disparo tras aplicar la dispersión actual. */
 	FVector CalculateShotDirection(const FVector& AimDirection) const;
@@ -146,7 +217,8 @@ private:
 	void Multicast_PlayFireEffects();
 
 	UFUNCTION(NetMulticast, Unreliable)
-	void Multicast_PlayImpactEffect(const FVector_NetQuantize& ImpactLocation);
+	void Multicast_PlayImpactEffect(const FVector_NetQuantize& ImpactLocation,
+		const FVector_NetQuantizeNormal& ImpactNormal, const UPhysicalMaterial* SurfaceMaterial);
 
 	UFUNCTION(Server, Reliable)
 	void Server_Reload();

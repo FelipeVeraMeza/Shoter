@@ -44,6 +44,7 @@ void ULagCompensationComponent::SaveFrame()
 	Frame.Rotation = Capsule->GetComponentRotation();
 	Frame.CapsuleHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
 	Frame.CapsuleRadius = Capsule->GetScaledCapsuleRadius();
+	Frame.LeanOffset = Character->GetLeanWorldOffset();
 
 	History.Add(Frame);
 
@@ -93,6 +94,7 @@ bool ULagCompensationComponent::GetFrameAtTime(float WorldTime, FShooterFramePac
 			OutFrame.Rotation = FMath::Lerp(Older.Rotation, Newer.Rotation, Alpha);
 			OutFrame.CapsuleHalfHeight = FMath::Lerp(Older.CapsuleHalfHeight, Newer.CapsuleHalfHeight, Alpha);
 			OutFrame.CapsuleRadius = FMath::Lerp(Older.CapsuleRadius, Newer.CapsuleRadius, Alpha);
+			OutFrame.LeanOffset = FMath::Lerp(Older.LeanOffset, Newer.LeanOffset, Alpha);
 			return true;
 		}
 	}
@@ -106,7 +108,8 @@ bool ULagCompensationComponent::RayIntersectsCapsule(
 	const FShooterFramePackage& Frame,
 	FVector& OutImpactPoint,
 	float& OutDistanceAlongRay,
-	float& OutHeightFraction)
+	float& OutHeightFraction,
+	float& OutAxisDistanceFraction)
 {
 	const float SegmentHalfLength = FMath::Max(Frame.CapsuleHalfHeight - Frame.CapsuleRadius, 0.f);
 	const FVector CapsuleUp = Frame.Rotation.Quaternion().GetUpVector();
@@ -117,10 +120,13 @@ bool ULagCompensationComponent::RayIntersectsCapsule(
 	FVector ClosestOnRay, ClosestOnAxis;
 	FMath::SegmentDistToSegmentSafe(RayStart, RayEnd, AxisBottom, AxisTop, ClosestOnRay, ClosestOnAxis);
 
-	if (FVector::Dist(ClosestOnRay, ClosestOnAxis) > Frame.CapsuleRadius)
+	const float AxisDistance = FVector::Dist(ClosestOnRay, ClosestOnAxis);
+	if (AxisDistance > Frame.CapsuleRadius)
 	{
 		return false;
 	}
+
+	OutAxisDistanceFraction = AxisDistance / FMath::Max(Frame.CapsuleRadius, KINDA_SMALL_NUMBER);
 
 	OutImpactPoint = ClosestOnRay;
 	OutDistanceAlongRay = FVector::Dist(RayStart, ClosestOnRay);
@@ -128,6 +134,68 @@ bool ULagCompensationComponent::RayIntersectsCapsule(
 	const float TotalHeight = FMath::Max(Frame.CapsuleHalfHeight * 2.f, KINDA_SMALL_NUMBER);
 	const float HeightAboveFeet = FVector::DotProduct(ClosestOnRay - (Frame.Location - CapsuleUp * Frame.CapsuleHalfHeight), CapsuleUp);
 	OutHeightFraction = FMath::Clamp(HeightAboveFeet / TotalHeight, 0.f, 1.f);
+
+	return true;
+}
+
+bool ULagCompensationComponent::TraceAgainstFrame(
+	const FVector& RayStart,
+	const FVector& RayEnd,
+	const FShooterFramePackage& Frame,
+	FVector& OutImpactPoint,
+	float& OutDistanceAlongRay,
+	EShooterHitZone& OutZone) const
+{
+	const FVector Up = Frame.Rotation.Quaternion().GetUpVector();
+
+	// Cabeza: esfera en lo alto de la cápsula, desplazada si el personaje se
+	// asoma. Se prueba primero porque es la zona que más importa acertar.
+	const FVector HeadCenter = Frame.Location
+		+ Up * (Frame.CapsuleHalfHeight - HeadRadius - 4.f)
+		+ Frame.LeanOffset;
+
+	const FVector ClosestToHead = FMath::ClosestPointOnSegment(HeadCenter, RayStart, RayEnd);
+	if (FVector::DistSquared(ClosestToHead, HeadCenter) <= FMath::Square(HeadRadius))
+	{
+		OutImpactPoint = ClosestToHead;
+		OutDistanceAlongRay = FVector::Dist(RayStart, ClosestToHead);
+		OutZone = EShooterHitZone::Head;
+		return true;
+	}
+
+	// Cuerpo: la mitad superior acompaña la inclinación, así que se desplaza
+	// la cápsula entera la mitad del desplazamiento de la cabeza.
+	FShooterFramePackage BodyFrame = Frame;
+	BodyFrame.Location += Frame.LeanOffset * 0.5f;
+
+	float HeightFraction = 0.f;
+	float AxisFraction = 0.f;
+	if (!RayIntersectsCapsule(RayStart, RayEnd, BodyFrame, OutImpactPoint, OutDistanceAlongRay,
+		HeightFraction, AxisFraction))
+	{
+		return false;
+	}
+
+	// La cápsula redondeada sobresale por encima de los hombros: lo que pasa
+	// por ahí sin tocar la esfera de la cabeza es un fallo, no un impacto.
+	if (HeightFraction >= ShoulderHeightFraction)
+	{
+		return false;
+	}
+
+	if (HeightFraction < WaistHeightFraction)
+	{
+		OutZone = EShooterHitZone::Leg;
+	}
+	else if (AxisFraction > ArmRadiusFraction)
+	{
+		// Los bordes de la cápsula a la altura del tronco son los brazos.
+		OutZone = EShooterHitZone::Arm;
+	}
+	else
+	{
+		OutZone = HeightFraction >= ChestHeightFraction ? EShooterHitZone::Torso : EShooterHitZone::Stomach;
+	}
 
 	return true;
 }
@@ -140,10 +208,10 @@ bool ULagCompensationComponent::FindBestCharacterHit(
 	const AActor* IgnoredActor,
 	AShooterCharacter*& OutHitCharacter,
 	FVector& OutImpactPoint,
-	bool& bOutHeadshot)
+	EShooterHitZone& OutZone)
 {
 	OutHitCharacter = nullptr;
-	bOutHeadshot = false;
+	OutZone = EShooterHitZone::None;
 
 	if (!World)
 	{
@@ -174,8 +242,8 @@ bool ULagCompensationComponent::FindBestCharacterHit(
 
 		FVector Impact;
 		float Distance;
-		float HeightFraction;
-		if (!RayIntersectsCapsule(TraceStart, TraceEnd, Frame, Impact, Distance, HeightFraction))
+		EShooterHitZone Zone;
+		if (!LagComp->TraceAgainstFrame(TraceStart, TraceEnd, Frame, Impact, Distance, Zone))
 		{
 			continue;
 		}
@@ -185,7 +253,7 @@ bool ULagCompensationComponent::FindBestCharacterHit(
 			ClosestDistance = Distance;
 			OutHitCharacter = Candidate;
 			OutImpactPoint = Impact;
-			bOutHeadshot = HeightFraction >= LagComp->HeadshotHeightFraction;
+			OutZone = Zone;
 		}
 	}
 

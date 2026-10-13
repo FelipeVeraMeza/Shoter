@@ -43,20 +43,141 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Personaje")
 	bool IsDead() const;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movimiento")
-	float WalkSpeed = 400.f;
+	UFUNCTION(BlueprintPure, Category = "Personaje")
+	bool IsSprinting() const { return bIsSprinting; }
+
+	/**
+	 * El arma está en posición de tiro: ni corriendo, ni recién salido del
+	 * sprint, ni vendándose.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Personaje")
+	bool IsWeaponReady() const;
+
+	/** Origen del disparo: la vista, desplazada si el personaje se asoma. */
+	FVector GetShotOrigin() const;
+
+	/** Desplazamiento de la cabeza por la inclinación, en espacio de mundo. */
+	FVector GetLeanWorldOffset() const;
+
+	/**
+	 * Retroceso de un disparo, en grados. Se reparte en unos milisegundos y
+	 * RecoveryFraction de él se recupera al dejar de disparar.
+	 */
+	void AddRecoil(float PitchDegrees, float YawDegrees, float RecoveryFraction);
+
+	// --- Movimiento ---
+	//
+	// Velocidades de persona equipada, no de atleta: 3,6 m/s andando con el
+	// arma en posición y casi 6 m/s a la carrera.
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movimiento")
-	float SprintSpeed = 650.f;
+	float WalkSpeed = 360.f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movimiento")
-	float CrouchSpeed = 200.f;
+	float SprintSpeed = 590.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movimiento")
+	float CrouchSpeed = 170.f;
+
+	/** Fracción de la velocidad conservada al apuntar con la mira. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movimiento", meta = (ClampMin = "0.1", ClampMax = "1.0"))
+	float AimSpeedMultiplier = 0.55f;
+
+	/** Segundos que tarda el arma en volver a la posición de tiro tras correr. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movimiento", meta = (ClampMin = "0.0"))
+	float SprintOutTime = 0.25f;
+
+	/**
+	 * Agacharse a la carrera desliza. Desactivado por defecto: es un recurso
+	 * arcade que no encaja en un combate realista.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movimiento")
+	bool bAllowSlide = false;
+
+	// --- Resistencia ---
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Resistencia", meta = (ClampMin = "1.0"))
+	float MaxStamina = 100.f;
+
+	/** Consumo por segundo de carrera. Con 100 de máximo, unos 8 s de sprint. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Resistencia", meta = (ClampMin = "0.0"))
+	float SprintStaminaCost = 12.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Resistencia", meta = (ClampMin = "0.0"))
+	float JumpStaminaCost = 18.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Resistencia", meta = (ClampMin = "0.0"))
+	float StaminaRegenRate = 14.f;
+
+	/** Segundos de descanso antes de recuperar resistencia. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Resistencia", meta = (ClampMin = "0.0"))
+	float StaminaRegenDelay = 1.2f;
+
+	/** Resistencia mínima para empezar a correr: evita el sprint a tirones. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Resistencia", meta = (ClampMin = "0.0"))
+	float MinStaminaToSprint = 15.f;
+
+	UFUNCTION(BlueprintPure, Category = "Resistencia")
+	float GetStaminaPercent() const { return Stamina / FMath::Max(MaxStamina, 1.f); }
+
+	// --- Puntería ---
+
+	/**
+	 * Amplitud del balanceo de la mira al apuntar, en grados. Crece con el
+	 * cansancio y el movimiento; se reduce agachado y conteniendo la respiración.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Puntería", meta = (ClampMin = "0.0"))
+	float AimSwayAmplitude = 0.35f;
+
+	/** Ciclos de balanceo por segundo. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Puntería", meta = (ClampMin = "0.01"))
+	float AimSwayFrequency = 0.45f;
+
+	/** Segundos que se puede contener la respiración (correr mientras se apunta). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Puntería", meta = (ClampMin = "0.0"))
+	float MaxBreathHold = 5.f;
+
+	/** Velocidad a la que el retroceso sube el arma, en "fracción por segundo". */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Puntería", meta = (ClampMin = "1.0"))
+	float RecoilKickSpeed = 25.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Puntería", meta = (ClampMin = "0.1"))
+	float RecoilRecoverySpeed = 7.f;
+
+	UFUNCTION(BlueprintPure, Category = "Puntería")
+	bool IsHoldingBreath() const { return bHoldingBreath; }
+
+	UFUNCTION(BlueprintPure, Category = "Puntería")
+	float GetBreathPercent() const { return BreathRemaining / FMath::Max(MaxBreathHold, 0.01f); }
+
+	// --- Inclinación ---
+
+	/** Desplazamiento lateral de la cabeza al asomarse, en cm. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inclinación", meta = (ClampMin = "0.0"))
+	float LeanDistance = 38.f;
+
+	/** Giro de la vista al asomarse, en grados. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inclinación", meta = (ClampMin = "0.0", ClampMax = "30.0"))
+	float LeanRollDegrees = 12.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inclinación", meta = (ClampMin = "0.1"))
+	float LeanSpeed = 8.f;
+
+	// --- Caídas ---
+
+	/** Velocidad vertical (cm/s) a partir de la cual una caída hace daño: unos 6 m. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Caídas", meta = (ClampMin = "0.0"))
+	float FallDamageMinSpeed = 1100.f;
+
+	/** Velocidad vertical que resulta mortal: unos 20 m. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Caídas", meta = (ClampMin = "0.0"))
+	float FallDamageLethalSpeed = 2000.f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Cámara")
 	float DefaultFOV = 90.f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Cámara")
-	float AimFOV = 65.f;
+	float AimFOV = 60.f;
 
 	/** Velocidad inicial del deslizamiento (RF-4.6). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movimiento", meta = (ClampMin = "0.0"))
@@ -118,6 +239,20 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
 	TObjectPtr<UInputAction> ResetRangeAction;
 
+	/** Asomarse a la izquierda / derecha mientras se mantiene pulsado. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+	TObjectPtr<UInputAction> LeanLeftAction;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+	TObjectPtr<UInputAction> LeanRightAction;
+
+	/** Selector de fuego: tiro a tiro, ráfaga, automático. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+	TObjectPtr<UInputAction> FireModeAction;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+	TObjectPtr<UInputAction> BandageAction;
+
 	/** Granada que lanza el personaje (RF-5.11). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Granadas")
 	TSubclassOf<AShooterGrenade> GrenadeClass;
@@ -139,6 +274,8 @@ protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void PossessedBy(AController* NewController) override;
 	virtual void PawnClientRestart() override;
+	virtual void Jump() override;
+	virtual void Landed(const FHitResult& Hit) override;
 
 	/** Registra los mapping contexts en el subsistema del jugador local. */
 	void AddInputMappingContexts();
@@ -164,6 +301,45 @@ private:
 
 	UPROPERTY(Replicated)
 	bool bIsSliding = false;
+
+	/** Dirección de la inclinación pedida: -1 izquierda, 0 recto, 1 derecha. */
+	UPROPERTY(Replicated)
+	int8 LeanInput = 0;
+
+	/** Inclinación actual, interpolada hacia LeanInput en todas las máquinas. */
+	float CurrentLean = 0.f;
+
+	/** Fracción de la inclinación que cabe sin meter la cabeza en una pared. */
+	float LeanClearance = 1.f;
+
+	bool bLeanLeftHeld = false;
+	bool bLeanRightHeld = false;
+
+	FVector DefaultCameraLocation = FVector(0.f, 0.f, 64.f);
+
+	float Stamina = 100.f;
+	float LastStaminaUseTime = -1000.f;
+	float LastSprintEndTime = -1000.f;
+
+	bool bHoldingBreath = false;
+	float BreathRemaining = 5.f;
+
+	/** Tras agotar el aliento, el pulso se dispara un rato. */
+	bool bBreathExhausted = false;
+
+	/** Balanceo aplicado en el frame anterior, para aplicar solo la diferencia. */
+	FRotator AppliedSway = FRotator::ZeroRotator;
+	float SwayTime = 0.f;
+
+	/** Amplitud efectiva, suavizada: un cambio brusco haría saltar la mira. */
+	float CurrentSwayAmplitude = 0.f;
+
+	/** Retroceso aún por aplicar a la vista. */
+	FRotator PendingRecoil = FRotator::ZeroRotator;
+
+	/** Retroceso que se devolverá al dejar de disparar. */
+	FRotator RecoilToRecover = FRotator::ZeroRotator;
+	float LastRecoilTime = -1000.f;
 
 	float SlideTimeRemaining = 0.f;
 	float LastSlideEndTime = -1000.f;
@@ -204,6 +380,29 @@ private:
 		const FVector_NetQuantizeNormal& Direction);
 
 	void UpdateMaxWalkSpeed();
+
+	void StartLeanLeft();
+	void StopLeanLeft();
+	void StartLeanRight();
+	void StopLeanRight();
+	void UpdateLeanInput();
+	void CycleFireMode();
+	void StartBandage();
+
+	UFUNCTION(Server, Reliable)
+	void Server_SetLean(int8 NewLean);
+
+	void UpdateStamina(float DeltaSeconds);
+	void UpdateLean(float DeltaSeconds);
+
+	/** Balanceo, retroceso e inclinación: todo lo que mueve la vista sin el ratón. */
+	void UpdateViewModifiers(float DeltaSeconds);
+
+	/** Viñeta y desaturación por supresión y heridas. */
+	void UpdateCameraEffects();
+
+	/** Gira la vista sin pasar por las escalas de entrada del controlador. */
+	void AddViewRotation(const FRotator& Delta);
 
 	/**
 	 * El estado de apuntar y correr se predice en el cliente para que responda al

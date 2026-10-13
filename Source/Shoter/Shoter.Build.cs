@@ -22,7 +22,9 @@ public class Shoter : ModuleRules
 			"UMG",
 			// Bots: navegación y percepción (RF-3.6, RF-8.4).
 			"AIModule",
-			"NavigationSystem"
+			"NavigationSystem",
+			// UPhysicalMaterial: la resistencia balística de cada superficie.
+			"PhysicsCore"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]
