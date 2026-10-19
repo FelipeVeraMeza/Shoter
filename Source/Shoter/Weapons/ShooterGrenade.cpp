@@ -6,6 +6,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "NiagaraFunctionLibrary.h"
 #include "TimerManager.h"
+#include "Effects/ShooterEffects.h"
 
 AShooterGrenade::AShooterGrenade()
 {
@@ -102,9 +103,20 @@ void AShooterGrenade::Multicast_PlayExplosion_Implementation(const FVector_NetQu
 	{
 		UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), ExplosionEffect, Location);
 	}
-
-	if (ExplosionSound)
+	else
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, ExplosionSound, Location);
+		// Sin sistema de partículas: nube de tierra grande, esquirlas y un
+		// destello que ilumina el entorno un instante.
+		ShooterEffects::SpawnImpact(GetWorld(), Location, FVector::UpVector, EShooterImpactKind::Dirt, 5.f);
+		ShooterEffects::SpawnLightFlash(GetWorld(), Location + FVector(0.f, 0.f, 60.f),
+			FLinearColor(1.f, 0.7f, 0.4f), 6000.f, 1600.f, 0.18f);
+	}
+
+	// Sin sonido propio, el disparo de la plantilla muy grave hace de detonación.
+	USoundBase* Sound = ExplosionSound ? ExplosionSound.Get() : ShooterEffects::GetDefaultGunshot();
+	if (Sound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, Sound, Location, ExplosionSound ? 1.f : 2.5f,
+			ExplosionSound ? 1.f : 0.42f, 0.f, ShooterEffects::GetGunshotAttenuation());
 	}
 }

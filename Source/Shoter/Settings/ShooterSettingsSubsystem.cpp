@@ -12,6 +12,8 @@
 #include "UserSettings/EnhancedInputUserSettings.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/World.h"
+#include "AudioDevice.h"
 
 void UShooterSettingsSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -57,8 +59,29 @@ void UShooterSettingsSubsystem::ApplyVolumeToClass(
 	UGameplayStatics::PushSoundMixModifier(GetGameInstance(), Mix);
 }
 
+void UShooterSettingsSubsystem::ApplyPrimaryVolumeFallback()
+{
+	if (!MasterSoundClass.IsNull())
+	{
+		return;
+	}
+
+	const UGameInstance* GameInstance = GetGameInstance();
+	UWorld* World = GameInstance ? GameInstance->GetWorld() : nullptr;
+	if (!World)
+	{
+		return;
+	}
+
+	if (FAudioDeviceHandle AudioDevice = World->GetAudioDevice())
+	{
+		AudioDevice->SetTransientPrimaryVolume(GetMasterVolume());
+	}
+}
+
 void UShooterSettingsSubsystem::ApplyAllVolumes()
 {
+	ApplyPrimaryVolumeFallback();
 	ApplyVolumeToClass(MasterSoundClass, GetMasterVolume());
 	ApplyVolumeToClass(EffectsSoundClass, GetEffectsVolume());
 	ApplyVolumeToClass(MusicSoundClass, GetMusicVolume());
@@ -386,6 +409,7 @@ void UShooterSettingsSubsystem::SetMasterVolume(float Value)
 
 	Save->MasterVolume = FMath::Clamp(Value, 0.f, 1.f);
 	ApplyVolumeToClass(MasterSoundClass, Save->MasterVolume);
+	ApplyPrimaryVolumeFallback();
 	SaveProfile();
 }
 

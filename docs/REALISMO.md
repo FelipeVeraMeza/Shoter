@@ -15,8 +15,18 @@ DataAssets: nada de lo que aquí aparece obliga a recompilar para afinarlo.
    exec(open(r"<proyecto>/Content/Python/build_realistic_map.py").read())
    ```
 
-3. Abre `Content/Maps/Lvl_Distrito` y pulsa **Play**. Hay bots: el modo
-   rellena hasta 8 jugadores.
+3. El editor abre `Lvl_Distrito` (es el mapa de inicio del editor): pulsa
+   **Play**. Hay bots: el modo rellena hasta 8 jugadores.
+
+**El script hay que ejecutarlo después de compilar**: crea materiales y
+coloca actores de clases C++ nuevas (`AShooterFireSource`,
+`AShooterMenuGameMode`). Si se ejecuta con un binario viejo, avisa en el log
+y deja fuera los fuegos.
+
+El juego empaquetado (o *Standalone*) arranca en `Lvl_Menu`: **Jugar →
+modo y jugadores → Desplegar en Distrito**. La URL lleva las opciones
+(`Lvl_Distrito?modo=dominacion?jugadores=8`) y las lee
+`AShooterGameMode::InitGame`.
 
 El script es idempotente: reejecutarlo actualiza armas, materiales y controles,
 y reconstruye solo los actores que generó él mismo (etiqueta `ShoterGenerado`).
@@ -36,6 +46,80 @@ Lo que añadas a mano al nivel se conserva.
 | Cambiar de arma | Rueda o `1` | Y |
 | Comprobar cargador | `R` con el cargador lleno | X |
 | Pausa | `P` / `Esc` | Start |
+| Equipamiento (arma principal) | `L` | — |
+| Lista de controles en pantalla | `F1` | — |
+
+`F1` y `L` no pasan por Enhanced Input: son teclas de interfaz y las lee
+`AShooterPlayerController::PollMenuKeys`, así que funcionan también muerto.
+
+---
+
+## Primera persona — `UShooterFirstPersonComponent`
+
+El arma ya no flota: la sostienen unos brazos.
+
+- **Brazos.** `AShooterCharacter::FirstPersonArms` es el mismo maniquí que
+  el cuerpo (Manny o Quinn, con el tinte del equipo), con la cabeza y las
+  piernas ocultas y una pose de apuntar de la plantilla (`MF_Rifle_Idle_ADS`,
+  `MF_Pistol_Idle_ADS`) en modo *Single Node*.
+- **El arma manda, los brazos siguen.** El componente coloca el arma
+  respecto a la cámara y luego mueve los brazos para que el socket
+  `HandGrip_R` caiga en la empuñadura (brazos = mano⁻¹ · arma). Así la mira
+  queda siempre en el eje de la vista al apuntar, con cualquier malla.
+- **Geometría deducida de la malla** (`AWeaponBase::BuildViewFrame`): el eje
+  largo de la caja es el cañón (orientado al socket `Muzzle`), el borde
+  superior es la línea de mira. Si una malla no encaja, se fija a mano con
+  `bOverrideSightLocation` / `SightLocation` en el DataAsset.
+- **Peso del arma:** balanceo al andar, retraso al girar, golpe de retroceso
+  hacia el hombro, posición baja a la carrera, giro en la recarga (con la
+  animación `MM_*_Reload` estirada a `ReloadTime`), bajada al cambiar de arma
+  o vendarse.
+- **Sin atravesar paredes:** brazos y arma son primitivas *First Person*: la
+  cámara los dibuja con su propio campo de visión (74°, 52° apuntando) y a
+  escala 0,6 hacia el ojo.
+- **Lo que ven los demás:** el cuerpo usa `ABP_TP_Rifle` / `ABP_TP_Pistol`
+  de la plantilla (solo dependen de `Character`, con *aim offset* por
+  cabeceo) y el arma va en su mano. Cada arma tiene dos mallas: la del
+  mundo (`WeaponMesh`) y la de primera persona (`FirstPersonMesh`).
+
+Ajustes por arma en el DataAsset: `HipSightOffset` (dónde queda la mira a la
+cadera), `AimEyeDistance` (distancia ojo-mira), `VisualKickBack/Pitch`.
+
+---
+
+## Visores — `EWeaponSightType`
+
+| Tipo | Arma | Cómo se ve |
+|---|---|---|
+| Miras metálicas | Pistola | Se apunta por encima de la corredera |
+| Holográfico | Fusil de asalto | Caja con ventana y cristal con punto y anillo rojos (`M_Reticula`), montada sobre el arma |
+| Aumentos | Fusil de tirador | Tubo con anillas; al apuntar, el HUD dibuja la imagen del visor a pantalla completa (retícula dúplex con marcas de caída) y el arma se oculta |
+
+Las piezas del visor se construyen con mallas básicas en
+`AWeaponBase::LayoutSight`; no hace falta ningún modelo.
+
+---
+
+## Efectos — `ShooterEffects` (sin Niagara)
+
+El proyecto no tiene sistemas de partículas, así que los efectos se
+construyen con mallas básicas del motor y los materiales que crea el script
+en `Content/Realista/Efectos`. Si un DataAsset o un material físico tiene un
+sistema Niagara asignado, se usa ese en su lugar.
+
+| Efecto | Clase | Detalle |
+|---|---|---|
+| Fogonazo | `AWeaponBase::ShowMuzzleFlash` | Tres planos aditivos (`M_Fogonazo`) en la boca, girados al azar, y una luz de 50 ms que ilumina el entorno |
+| Trazadora | `AShooterTracer` | Una de cada `TracerEveryNShots` balas; trazo incandescente (`M_Trazadora`) que vuela al 55 % de la velocidad real para que el ojo lo siga |
+| Casquillo | `AShooterShellCasing` | Cilindro de latón con física, expulsado a la derecha; solo a menos de 25 m de la cámara y con tope de 48 |
+| Impacto | `AShooterImpactEffect` | Nube de polvo del color de la superficie, esquirlas con física (de cerca) y marca (`M_Impacto`); sangre en los cuerpos |
+| Explosión | `AShooterGrenade` | Impacto a escala 5, destello de luz y el disparo de la plantilla muy grave |
+| Fuego | `AShooterFireSource` | Llamas en planos cruzados (`M_Fuego`), luz que parpadea con ruido y una columna de humo de esferas translúcidas que el viento inclina |
+
+**Sonido:** el proyecto solo trae `FirstPersonTemplateWeaponFire02`. Se usa
+para las tres armas con distinto tono (`FireSoundPitch`) y con atenuación
+real: se oye a 150 m y pierde agudos con la distancia. Los sonidos propios
+de cada arma necesitan assets de Fab.
 
 ---
 
@@ -152,7 +236,8 @@ La zona viaja como nombre de hueso en el daño puntual (`zone_head`,
   cargador + 1. En vacío, la recarga es más lenta (`EmptyReloadTime`).
 - **Selector de fuego.** `AvailableFireModes` en el DataAsset; el servidor
   solo acepta posiciones que el arma tenga.
-- **Aumento por arma.** `AimFOV`: miras metálicas 55°, visor 30°.
+- **Aumento por arma.** `AimFOV`: miras metálicas 55°, holográfico 55°,
+  visor de aumentos 20° (unos 4×).
 
 | Arma | Daño | RPM | Cargador | V. boca | Penetración |
 |---|---:|---:|---:|---:|---:|
@@ -160,8 +245,46 @@ La zona viaja como nombre de hueso en el daño puntual (`zone_head`,
 | Pistola 9 mm | 30 | 450 | 17 | 370 m/s | 12 |
 | Fusil de tirador 7,62 | 70 | 300 | 20 | 830 m/s | 55 |
 
-El fusil de tirador se crea (`BP_Tirador`) pero no va en el equipo inicial:
-falta una pantalla de equipamiento que lo ofrezca.
+### Equipamiento
+
+La pantalla de equipamiento (`L`, o *Pausa → Equipamiento*) ofrece las armas
+de `AShooterGameMode::PrimaryWeaponOptions` (fusil de asalto y fusil de
+tirador). La elección viaja al servidor
+(`AShooterPlayerController::Server_SelectPrimaryWeapon`), que solo acepta
+armas de esa lista, y se aplica al reaparecer. La pistola, dos granadas y dos
+vendas van siempre. Un 25 % de los bots lleva el fusil de tirador
+(`MarksmanBotChance`).
+
+---
+
+## Bots — `AShooterBotController`
+
+Antes de esta revisión los bots no podían jugar una partida de verdad: no
+tenían `PlayerState` (sin equipo, todos disparaban a todos), al morir no
+reaparecían ni daban puntos, no podían apuntar arriba ni abajo y veían a
+través de las paredes.
+
+Ahora pelean como tiradores disciplinados:
+
+- **Necesitan verlos:** cono de 70° y línea de visión al pecho o la cabeza
+  (90 m de alcance). Las vallas de madera tapan la vista aunque las balas
+  las atraviesen.
+- **Tiempo de reacción** de 0,35 a 0,75 s ante un enemigo nuevo.
+- **Puntería con error** que crece con la distancia y con el movimiento, y
+  baja mientras siguen al mismo blanco. A veces buscan la cabeza de cerca.
+- **Disciplina de tiro:** ráfagas de 3 a 6 en corto, pares a media
+  distancia, tiro a tiro de lejos. Apuntan con la mira a más de 10 m y se
+  agachan cuando están quietos y lejos.
+- **Movimiento:** se acercan hasta 22 m y desde ahí dan pasos laterales.
+  Patrullan entre las zonas A, B y C y el lado enemigo.
+- **Reaccionan al daño:** se giran hacia quien les dispara aunque no lo
+  vean, y van a buscarlo a su última posición conocida.
+- **Mantenimiento:** recargan en las pausas y se vendan cuando sangran y no
+  hay nadie a la vista.
+- Tienen indicativo de radio (Halcón, Lobo, Cuervo...), equipo asignado
+  antes de aparecer y aparecen en el lado de su equipo.
+
+El fuego amigo existe, pero una baja propia no puntúa.
 
 ---
 
@@ -187,16 +310,42 @@ Barrio urbano de 160 × 120 m. Alfa aparece al oeste y Bravo al este.
 
 | Carril | Ambiente | Distancia | Zona |
 |---|---|---|---|
-| Norte | Callejón con contenedores de basura, cajas y vallas atravesables | Corta | A |
-| Centro | Avenida de 16 m con coches, barreras y plaza con monumento | Media | B |
-| Sur | Patio industrial: nave grande, contenedores apilados, muro con huecos | Media-larga | C (en la nave) |
+| Norte | Callejón con contenedores de basura, bolsas, bidones ardiendo, tendido eléctrico y vallas atravesables | Corta | A |
+| Centro | Avenida de 16 m con coches (dos ardiendo), autobús calcinado y camión, barreras, cráteres y plaza con monumento partido | Media | B |
+| Sur | Patio industrial: nave con pasarela elevada, contenedores apilados o abiertos, gaviones, muro con huecos | Media-larga | C (en la nave) |
 
-- Edificios entre carriles con puertas a ambos lados y ventanas a la avenida.
-  El bloque central tiene dos plantas con rampa interior.
-- Fachadas altas alrededor: cierran el mapa sin muros invisibles.
-- Iluminación de tarde: sol a 5200 K, cielo con atmósfera y nubes
-  volumétricas, niebla volumétrica, post-proceso con grano y viñeta suaves.
-- Navegación para bots y zonas de Dominación ya colocadas.
+- Edificios entre carriles con puertas a ambos lados y ventanas a la avenida,
+  con alféizares, dinteles, jambas, impostas, balcones y azoteas con
+  máquinas, depósitos y antenas. Dentro hay mobiliario (tienda saqueada,
+  oficina, vivienda) que sirve de cobertura.
+- El bloque central tiene dos plantas con rampa interior; el del este está
+  en ruinas (muros desiguales, losa caída, escombros, vigas, fuego).
+- Andamio con lona en la fachada del bloque NE.
+- Calzada con línea central, bordes, pasos de peatones, bordillos y tapas de
+  alcantarilla; farolas con brazo y luminaria, alguna doblada.
+- Sacos terreros apilados a matajunta, barreras con perfil escalonado,
+  palés, neumáticos, árboles secos, bancos y montones de cascotes.
+- Fachadas altas alrededor con ventanas (algunas tapiadas): cierran el mapa
+  sin muros invisibles.
+- **Iluminación de atardecer dorado:** sol a 13° y 3800 K, dispersión
+  volumétrica (los rayos de luz atraviesan el humo), *light shafts* al mirar
+  al sol, atmósfera con más polvo en suspensión, niebla volumétrica cálida,
+  bolsas de bruma local y gradación de color sucia (algo desaturada, luces
+  cálidas, sombras frías, grano y aberración cromática).
+- Navegación para bots, zonas de Dominación y puntos de aparición con la
+  etiqueta de su equipo (`PlayerStartTag` = `Alfa` / `Bravo`).
+
+Del orden de 1500 piezas, todas con movilidad estática; el número exacto lo escribe el script en el log (`piezas de geometría`).
+
+### Menú — `Lvl_Menu`
+
+`AShooterMenuGameMode` pone la vista en la cámara del decorado (un rincón del
+Distrito con un coche ardiendo) y abre el menú principal. Los menús son
+Slate puro (`SShooterMenuScreen`): principal, jugar (modo y número de
+jugadores), opciones (sensibilidad, invertir Y, HUD realista, volumen,
+calidad, ventana, VSync), controles, equipamiento, progresión y pausa. Si
+alguna vez se maquetan los `WBP_*` y se asignan en *Project Settings →
+Shooter Menu Subsystem*, tienen prioridad sobre el menú integrado.
 
 ### Materiales
 
@@ -221,3 +370,7 @@ script. Busca por palabras clave (`concrete`, `brick`, `asphalt`, `rust`,
 - **Sin desenfoque de movimiento:** emborrona al enemigo justo al girar.
 - Las armas replican a 20 Hz en vez de a la frecuencia del personaje.
 - El subsistema de balística solo hace *tick* cuando hay balas en vuelo.
+- Los efectos no existen en un servidor dedicado, los impactos lejanos (más
+  de 120 m) no se crean y las piezas con física (casquillos, esquirlas) solo
+  aparecen cerca de la cámara.
+- Los bots comprueban la línea de visión cada 0,15 s, no en cada fotograma.

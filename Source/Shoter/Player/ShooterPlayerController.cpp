@@ -1,5 +1,10 @@
 #include "Player/ShooterPlayerController.h"
 #include "Core/ShooterGameMode.h"
+#include "Core/ShooterGameState.h"
+#include "Core/ShooterPlayerState.h"
+#include "Weapons/WeaponBase.h"
+#include "UI/ShooterMenuSubsystem.h"
+#include "InputCoreTypes.h"
 #include "Progression/ShooterProgressionSubsystem.h"
 #include "Engine/GameInstance.h"
 #include "Engine/NetConnection.h"
@@ -106,6 +111,79 @@ void AShooterPlayerController::OnCharacterDied(AController* Killer)
 	}
 }
 
+void AShooterPlayerController::Server_SelectPrimaryWeapon_Implementation(TSubclassOf<AWeaponBase> WeaponClass)
+{
+	const AShooterGameState* ShooterGameState = GetWorld()->GetGameState<AShooterGameState>();
+	AShooterPlayerState* ShooterState = GetPlayerState<AShooterPlayerState>();
+	if (!ShooterGameState || !ShooterState)
+	{
+		return;
+	}
+
+	// Un cliente modificado podría pedir cualquier clase: solo valen las que
+	// ofrece el modo.
+	if (!WeaponClass || !ShooterGameState->GetPrimaryWeaponOptions().Contains(WeaponClass))
+	{
+		return;
+	}
+
+	ShooterState->SetPreferredPrimary(WeaponClass);
+}
+
+void AShooterPlayerController::RequestPrimaryWeapon(TSubclassOf<AWeaponBase> WeaponClass)
+{
+	LastLoadoutChangeTime = GetWorld()->GetTimeSeconds();
+	Server_SelectPrimaryWeapon(WeaponClass);
+}
+
+float AShooterPlayerController::GetTimeSinceLoadoutChange() const
+{
+	return GetWorld()->GetTimeSeconds() - LastLoadoutChangeTime;
+}
+
+float AShooterPlayerController::GetTimeSinceSpawn() const
+{
+	return GetWorld()->GetTimeSeconds() - LastSpawnTime;
+}
+
+void AShooterPlayerController::OnPossess(APawn* InPawn)
+{
+	Super::OnPossess(InPawn);
+	LastSpawnTime = GetWorld()->GetTimeSeconds();
+}
+
+void AShooterPlayerController::AcknowledgePossession(APawn* InPawn)
+{
+	Super::AcknowledgePossession(InPawn);
+	LastSpawnTime = GetWorld()->GetTimeSeconds();
+}
+
+void AShooterPlayerController::PollMenuKeys()
+{
+	// Se leen directamente: son teclas de interfaz, no de juego, y no deben
+	// depender de que el contexto de combate esté activo (en la muerte, por
+	// ejemplo, no hay personaje que lo registre).
+	if (WasInputKeyJustPressed(EKeys::F1))
+	{
+		bShowControlsHelp = !bShowControlsHelp;
+	}
+
+	if (WasInputKeyJustPressed(EKeys::L))
+	{
+		if (UShooterMenuSubsystem* Menu = GetGameInstance() ? GetGameInstance()->GetSubsystem<UShooterMenuSubsystem>() : nullptr)
+		{
+			if (Menu->GetCurrentScreen() == EShooterMenuScreen::Loadout)
+			{
+				Menu->CloseMenu();
+			}
+			else
+			{
+				Menu->OpenScreen(EShooterMenuScreen::Loadout);
+			}
+		}
+	}
+}
+
 void AShooterPlayerController::Client_StartKillCam_Implementation(AActor* KillerActor)
 {
 	// Sin asesino no hay a quién enfocar: una caída o un suicidio dejan la
@@ -166,6 +244,11 @@ void AShooterPlayerController::Tick(float DeltaSeconds)
 	if (SuppressionLevel > 0.f)
 	{
 		SuppressionLevel = FMath::Max(SuppressionLevel - SuppressionDecayRate * DeltaSeconds, 0.f);
+	}
+
+	if (IsLocalController())
+	{
+		PollMenuKeys();
 	}
 
 	// La killcam corre en el cliente que murió, mientras espera reaparecer.

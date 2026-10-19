@@ -9,6 +9,28 @@ class USkeletalMesh;
 class USoundBase;
 class UNiagaraSystem;
 class UCurveFloat;
+class UAnimSequenceBase;
+class UAnimInstance;
+
+/** Cómo se empuña el arma: decide las animaciones del cuerpo y de los brazos. */
+UENUM(BlueprintType)
+enum class EWeaponHoldType : uint8
+{
+	Rifle	UMETA(DisplayName = "Fusil"),
+	Pistol	UMETA(DisplayName = "Pistola")
+};
+
+/** Sistema de puntería montado en el arma. */
+UENUM(BlueprintType)
+enum class EWeaponSightType : uint8
+{
+	/** Miras metálicas: se apunta por encima del arma. */
+	Iron		UMETA(DisplayName = "Miras metálicas"),
+	/** Visor holográfico con retícula roja sobre el cajón de mecanismos. */
+	Holographic	UMETA(DisplayName = "Holográfico"),
+	/** Visor de aumentos: a pantalla completa al apuntar. */
+	Scope		UMETA(DisplayName = "Visor de aumentos")
+};
 
 /**
  * Configuración completa de un arma. Ningún valor de balance vive en C++:
@@ -195,6 +217,89 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Visual")
 	TObjectPtr<UNiagaraSystem> ImpactEffect;
+
+	// --- Empuñadura y vista en primera persona ---
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Empuñadura")
+	EWeaponHoldType HoldType = EWeaponHoldType::Rifle;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Empuñadura")
+	EWeaponSightType SightType = EWeaponSightType::Iron;
+
+	/**
+	 * Pose de los brazos en primera persona. El arma se coloca respecto a la
+	 * cámara y los brazos se ajustan a ella, así que basta una pose de apuntar.
+	 * Sin asignar se usa la del maniquí según HoldType.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Empuñadura")
+	TObjectPtr<UAnimSequenceBase> FirstPersonIdleAnim;
+
+	/** Recarga de los brazos; se estira o se acorta hasta durar ReloadTime. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Empuñadura")
+	TObjectPtr<UAnimSequenceBase> FirstPersonReloadAnim;
+
+	/** Animation Blueprint del cuerpo que ven los demás jugadores. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Empuñadura")
+	TSubclassOf<UAnimInstance> ThirdPersonAnimClass;
+
+	/**
+	 * Punto de la mira respecto a la cámara con el arma a la cadera, en cm
+	 * (X adelante, Y derecha, Z arriba). Se mide antes de la escala de
+	 * primera persona de la cámara.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Empuñadura")
+	FVector HipSightOffset = FVector(32.f, 15.f, -13.f);
+
+	/**
+	 * Distancia del ojo a la mira al apuntar, en cm. La mira queda en el eje
+	 * de la cámara: por eso apuntar es mirar a través de ella.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Empuñadura", meta = (ClampMin = "8.0"))
+	float AimEyeDistance = 24.f;
+
+	/**
+	 * Punto de mira en el espacio de la malla del arma. Si no se fija, se
+	 * deduce de la malla: borde superior del cajón, en la línea del cañón.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Empuñadura")
+	bool bOverrideSightLocation = false;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Empuñadura", meta = (EditCondition = "bOverrideSightLocation"))
+	FVector SightLocation = FVector::ZeroVector;
+
+	/** Cuánto por debajo del borde superior de la malla pasa la línea de mira, en cm. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Empuñadura")
+	float IronSightDrop = 1.2f;
+
+	/** Retroceso visual del arma hacia el hombro por disparo, en cm. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Empuñadura", meta = (ClampMin = "0.0"))
+	float VisualKickBack = 2.2f;
+
+	/** Cabeceo visual del arma por disparo, en grados. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Empuñadura", meta = (ClampMin = "0.0"))
+	float VisualKickPitch = 2.5f;
+
+	// --- Efectos ---
+
+	/** Una de cada N balas es trazadora. Cero: ninguna. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Visual", meta = (ClampMin = "0"))
+	int32 TracerEveryNShots = 3;
+
+	/** Longitud del casquillo expulsado, en cm. Cero: el arma no expulsa. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Visual", meta = (ClampMin = "0.0"))
+	float ShellLength = 4.5f;
+
+	/** Tamaño del fogonazo respecto al del fusil. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Visual", meta = (ClampMin = "0.0"))
+	float MuzzleFlashScale = 1.f;
+
+	/** Tono del disparo: el mismo sonido base suena distinto por calibre. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Audio", meta = (ClampMin = "0.2", ClampMax = "3.0"))
+	float FireSoundPitch = 1.f;
+
+	/** Volumen del disparo. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Audio", meta = (ClampMin = "0.0"))
+	float FireSoundVolume = 1.f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Audio")
 	TObjectPtr<USoundBase> FireSound;

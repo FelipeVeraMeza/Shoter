@@ -15,6 +15,8 @@
 #include "Camera/PlayerCameraManager.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
+#include "Player/ShooterFirstPersonComponent.h"
+#include "UI/ShooterMenuSubsystem.h"
 
 // Todo texto visible pasa por LOCTEXT: así se extrae a las tablas de
 // localización sin tocar el código (RNF-6.1).
@@ -56,6 +58,18 @@ void AShooterHUD::DrawHUD()
 	// visión (UpdateCameraEffects) y la munición, mirando el cargador.
 	const bool bRealistic = IsRealisticHUD();
 
+	// El visor va debajo de todo lo demás: es lo que ve el ojo, no interfaz.
+	if (Character && !Character->IsDead())
+	{
+		if (const UShooterFirstPersonComponent* FirstPerson = Character->GetFirstPersonView())
+		{
+			if (FirstPerson->IsScopeViewActive())
+			{
+				DrawScopeOverlay();
+			}
+		}
+	}
+
 	if (Character && !Character->IsDead())
 	{
 		if (!bRealistic)
@@ -88,6 +102,11 @@ void AShooterHUD::DrawHUD()
 	const bool bMatchOver = ShooterGameState
 		&& ShooterGameState->GetMatchPhase() == EMatchPhase::Finished;
 
+	if (ShooterPC)
+	{
+		DrawHints(ShooterPC);
+	}
+
 	if (bMatchOver)
 	{
 		DrawScoreboard();
@@ -95,6 +114,149 @@ void AShooterHUD::DrawHUD()
 	else if (ShooterPC && ShooterPC->IsInputKeyDown(EKeys::Tab))
 	{
 		DrawLiveScoreboard();
+	}
+	else if (ShooterPC && ShooterPC->IsControlsHelpVisible())
+	{
+		DrawControlsHelp();
+	}
+}
+
+void AShooterHUD::DrawScopeOverlay()
+{
+	const float Width = Canvas->ClipX;
+	const float Height = Canvas->ClipY;
+	const float CenterX = Width * 0.5f;
+	const float CenterY = Height * 0.5f;
+	const float Radius = Height * 0.46f;
+
+	const FLinearColor Black(0.f, 0.f, 0.f, 1.f);
+
+	// Fuera del campo, negro. Se rellena por franjas horizontales: cada una
+	// tapa a izquierda y derecha del círculo a esa altura.
+	DrawRect(Black, 0.f, 0.f, Width, CenterY - Radius);
+	DrawRect(Black, 0.f, CenterY + Radius, Width, Height - (CenterY + Radius));
+
+	const float Step = 2.f;
+	for (float Y = CenterY - Radius; Y < CenterY + Radius; Y += Step)
+	{
+		const float Dy = (Y + Step * 0.5f) - CenterY;
+		const float HalfWidth = FMath::Sqrt(FMath::Max(Radius * Radius - Dy * Dy, 0.f));
+		DrawRect(Black, 0.f, Y, CenterX - HalfWidth + 1.f, Step);
+		DrawRect(Black, CenterX + HalfWidth - 1.f, Y, Width - (CenterX + HalfWidth) + 1.f, Step);
+
+		// Viñeta en el borde del campo: la lente oscurece hacia fuera.
+		const float Edge = HalfWidth * 0.08f + 4.f;
+		DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.45f), CenterX - HalfWidth, Y, Edge, Step);
+		DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.45f), CenterX + HalfWidth - Edge, Y, Edge, Step);
+	}
+
+	// Retícula dúplex: hilos finos en el centro y postes gruesos hacia fuera.
+	const FLinearColor Reticle(0.02f, 0.02f, 0.02f, 0.95f);
+	const float Thin = FMath::Max(1.f, Height / 900.f);
+	const float Thick = Thin * 4.f;
+	const float Inner = Radius * 0.45f;
+
+	DrawRect(Reticle, CenterX - Inner, CenterY - Thin * 0.5f, Inner * 2.f, Thin);
+	DrawRect(Reticle, CenterX - Thin * 0.5f, CenterY - Inner, Thin, Inner * 2.f);
+
+	DrawRect(Reticle, CenterX - Radius, CenterY - Thick * 0.5f, Radius - Inner, Thick);
+	DrawRect(Reticle, CenterX + Inner, CenterY - Thick * 0.5f, Radius - Inner, Thick);
+	DrawRect(Reticle, CenterX - Thick * 0.5f, CenterY + Inner, Thick, Radius - Inner);
+	DrawRect(Reticle, CenterX - Thick * 0.5f, CenterY - Radius, Thick, Radius - Inner);
+
+	// Marcas de medición en el hilo vertical inferior, para compensar la
+	// caída a larga distancia.
+	for (int32 Mark = 1; Mark <= 4; ++Mark)
+	{
+		const float MarkY = CenterY + Inner * 0.2f * Mark;
+		const float MarkWidth = (Mark % 2 == 0) ? Inner * 0.12f : Inner * 0.07f;
+		DrawRect(Reticle, CenterX - MarkWidth * 0.5f, MarkY - Thin * 0.5f, MarkWidth, Thin);
+	}
+}
+
+void AShooterHUD::DrawControlsHelp()
+{
+	struct FKeyLine
+	{
+		FText Action;
+		FText Keys;
+	};
+
+	const FKeyLine Lines[] = {
+		{ LOCTEXT("HelpMove", "Moverse"), LOCTEXT("HelpMoveKeys", "W A S D") },
+		{ LOCTEXT("HelpSprint", "Correr"), LOCTEXT("HelpSprintKeys", "Mayús") },
+		{ LOCTEXT("HelpCrouch", "Agacharse"), LOCTEXT("HelpCrouchKeys", "Ctrl / C") },
+		{ LOCTEXT("HelpJump", "Saltar"), LOCTEXT("HelpJumpKeys", "Espacio") },
+		{ LOCTEXT("HelpLean", "Asomarse"), LOCTEXT("HelpLeanKeys", "Q / E") },
+		{ LOCTEXT("HelpFire", "Disparar"), LOCTEXT("HelpFireKeys", "Clic izquierdo") },
+		{ LOCTEXT("HelpAim", "Apuntar"), LOCTEXT("HelpAimKeys", "Clic derecho") },
+		{ LOCTEXT("HelpBreath", "Contener la respiración"), LOCTEXT("HelpBreathKeys", "Mayús apuntando") },
+		{ LOCTEXT("HelpReload", "Recargar / mirar cargador"), LOCTEXT("HelpReloadKeys", "R") },
+		{ LOCTEXT("HelpFireMode", "Selector de fuego"), LOCTEXT("HelpFireModeKeys", "B") },
+		{ LOCTEXT("HelpSwitch", "Cambiar de arma"), LOCTEXT("HelpSwitchKeys", "Rueda / 1") },
+		{ LOCTEXT("HelpGrenade", "Granada"), LOCTEXT("HelpGrenadeKeys", "G") },
+		{ LOCTEXT("HelpBandage", "Vendarse"), LOCTEXT("HelpBandageKeys", "H") },
+		{ LOCTEXT("HelpScore", "Tabla de posiciones"), LOCTEXT("HelpScoreKeys", "Tab") },
+		{ LOCTEXT("HelpLoadout", "Equipamiento"), LOCTEXT("HelpLoadoutKeys", "L") },
+		{ LOCTEXT("HelpPause", "Pausa"), LOCTEXT("HelpPauseKeys", "Esc / P") },
+	};
+
+	const float RowHeight = 24.f;
+	const float Width = 420.f;
+	const float Height = 64.f + RowHeight * UE_ARRAY_COUNT(Lines);
+	const float X = Canvas->ClipX - Width - 42.f;
+	const float Y = FMath::Max((Canvas->ClipY - Height) * 0.5f, 20.f);
+
+	DrawPanel(this, X, Y, Width, Height);
+	DrawText(LOCTEXT("HelpTitle", "CONTROLES  (F1 para cerrar)").ToString(), TextPrimary,
+		X + 22.f, Y + 16.f, GEngine->GetMediumFont(), 1.f);
+
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Lines); ++Index)
+	{
+		const float RowY = Y + 52.f + Index * RowHeight;
+		DrawText(Lines[Index].Action.ToString(), TextMuted, X + 22.f, RowY, GEngine->GetSmallFont(), 1.1f);
+		DrawText(Lines[Index].Keys.ToString(), TextPrimary, X + Width * 0.58f, RowY, GEngine->GetSmallFont(), 1.1f);
+	}
+}
+
+void AShooterHUD::DrawHints(AShooterPlayerController* Controller)
+{
+	// Con un menú abierto, los avisos sobran.
+	if (const UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (const UShooterMenuSubsystem* Menu = GameInstance->GetSubsystem<UShooterMenuSubsystem>())
+		{
+			if (Menu->IsMenuOpen())
+			{
+				return;
+			}
+		}
+	}
+
+	const float CenterX = Canvas->ClipX * 0.5f;
+
+	if (Controller->GetTimeSinceLoadoutChange() < 4.f)
+	{
+		const FString Text = LOCTEXT("LoadoutSaved", "Equipamiento guardado: se aplicará al reaparecer").ToString();
+		float TextWidth = 0.f;
+		float TextHeight = 0.f;
+		GetTextSize(Text, TextWidth, TextHeight, GEngine->GetMediumFont(), 1.f);
+		DrawText(Text, FLinearColor(0.95f, 0.75f, 0.3f, 1.f), CenterX - TextWidth * 0.5f, Canvas->ClipY * 0.72f,
+			GEngine->GetMediumFont(), 1.f);
+	}
+
+	// Los primeros segundos de cada vida, un recordatorio discreto de las
+	// teclas que no son evidentes.
+	const float SinceSpawn = Controller->GetTimeSinceSpawn();
+	if (Controller->GetPawn() && SinceSpawn < 10.f && !Controller->IsControlsHelpVisible())
+	{
+		const float Alpha = FMath::Clamp((10.f - SinceSpawn) / 1.5f, 0.f, 1.f) * 0.85f;
+		const FString Text = LOCTEXT("SpawnHint", "F1 controles   ·   L equipamiento   ·   Esc pausa").ToString();
+		float TextWidth = 0.f;
+		float TextHeight = 0.f;
+		GetTextSize(Text, TextWidth, TextHeight, GEngine->GetSmallFont(), 1.1f);
+		DrawText(Text, FLinearColor(0.9f, 0.9f, 0.88f, Alpha), CenterX - TextWidth * 0.5f, Canvas->ClipY - 70.f,
+			GEngine->GetSmallFont(), 1.1f);
 	}
 }
 

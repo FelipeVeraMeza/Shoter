@@ -5,6 +5,8 @@
 #include "ShooterTypes.h"
 #include "ShooterGameState.generated.h"
 
+class AWeaponBase;
+
 UCLASS()
 class SHOTER_API AShooterGameState : public AGameStateBase
 {
@@ -30,6 +32,15 @@ public:
 	/** Solo servidor. Registra una eliminación y la replica a todos. */
 	void AddKillEvent(const FString& KillerName, const FString& VictimName,
 		const FString& WeaponName, bool bHeadshot);
+
+	/**
+	 * Armas principales que ofrece la pantalla de equipamiento. Las fija el
+	 * modo de juego y viajan a los clientes para poblar el menú.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Partida")
+	const TArray<TSubclassOf<AWeaponBase>>& GetPrimaryWeaponOptions() const { return PrimaryWeaponOptions; }
+
+	void SetPrimaryWeaponOptions(const TArray<TSubclassOf<AWeaponBase>>& Options) { PrimaryWeaponOptions = Options; }
 
 	/** Solo servidor. */
 	void SetMatchPhase(EMatchPhase NewPhase) { MatchPhase = NewPhase; }
@@ -57,4 +68,7 @@ private:
 	TArray<FShooterKillEvent> KillFeed;
 
 	static constexpr int32 MaxKillFeedEntries = 8;
+
+	UPROPERTY(Replicated)
+	TArray<TSubclassOf<AWeaponBase>> PrimaryWeaponOptions;
 };

@@ -5,6 +5,7 @@
 #include "ShooterMenuSubsystem.generated.h"
 
 class UUserWidget;
+class SWidget;
 
 UENUM(BlueprintType)
 enum class EShooterMenuScreen : uint8
@@ -15,7 +16,9 @@ enum class EShooterMenuScreen : uint8
 	Arsenal		UMETA(DisplayName = "Arsenal"),
 	Progression	UMETA(DisplayName = "Progresión"),
 	Options		UMETA(DisplayName = "Opciones"),
-	Pause		UMETA(DisplayName = "Pausa")
+	Pause		UMETA(DisplayName = "Pausa"),
+	Loadout		UMETA(DisplayName = "Equipamiento"),
+	Controls	UMETA(DisplayName = "Controles")
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMenuScreenChanged, EShooterMenuScreen, NewScreen);
@@ -26,6 +29,10 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMenuScreenChanged, EShooterMenuSc
  * El C++ decide qué pantalla toca y gestiona la pila de navegación; los
  * widgets solo componen y muestran (RNF-9.2). Las clases de widget se asignan
  * en Project Settings → Shoter Menu.
+ *
+ * Una pantalla sin widget asignado se dibuja con el menú integrado en Slate
+ * (SShooterMenuScreen): el juego tiene menús completos sin depender de que
+ * alguien maquete los Widget Blueprints en el editor.
  */
 UCLASS(Config = Game)
 class SHOTER_API UShooterMenuSubsystem : public UGameInstanceSubsystem
@@ -76,9 +83,26 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Menú")
 	void StartMatch(FName LevelName);
 
+	/**
+	 * Carga un nivel con opciones de partida en la URL ("modo=dominacion",
+	 * "jugadores=8"): las lee el modo de juego al arrancar.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Menú")
+	void StartMatchWithOptions(FName LevelName, const FString& Options);
+
+	/** Jugadores por partida elegidos en el menú; los huecos se rellenan con bots. */
+	UPROPERTY(BlueprintReadWrite, Category = "Menú")
+	int32 MatchPlayerCount = 8;
+
 private:
 	UPROPERTY()
 	TObjectPtr<UUserWidget> ActiveWidget;
+
+	/** Pantalla integrada en Slate, cuando no hay widget asignado. */
+	TSharedPtr<SWidget> SlateWidget;
+
+	/** La vista no gira con el ratón mientras hay un menú abierto. */
+	bool bLookInputIgnored = false;
 
 	EShooterMenuScreen CurrentScreen = EShooterMenuScreen::None;
 

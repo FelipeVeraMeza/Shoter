@@ -1,5 +1,8 @@
 #include "UI/ShooterMenuSubsystem.h"
+#include "UI/ShooterSlateMenu.h"
 #include "Blueprint/UserWidget.h"
+#include "Engine/GameViewportClient.h"
+#include "Framework/Application/SlateApplication.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "GameFramework/PlayerController.h"
@@ -88,27 +91,36 @@ void UShooterMenuSubsystem::ShowWidgetForScreen(EShooterMenuScreen Screen)
 {
 	RemoveActiveWidget();
 
-	const TSoftClassPtr<UUserWidget>* WidgetClassPtr = ScreenWidgets.Find(Screen);
-	if (!WidgetClassPtr)
+	APlayerController* Controller = GetLocalController();
+	if (!Controller)
 	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[Menu] Sin widget asignado para la pantalla %d. "
-				 "Configúralo en Project Settings -> Shoter Menu."),
-			static_cast<int32>(Screen));
 		return;
 	}
 
 	// Carga síncrona: los menús son pequeños y el jugador espera respuesta
 	// inmediata al pulsar.
-	UClass* WidgetClass = WidgetClassPtr->LoadSynchronous();
+	const TSoftClassPtr<UUserWidget>* WidgetClassPtr = ScreenWidgets.Find(Screen);
+	UClass* WidgetClass = WidgetClassPtr ? WidgetClassPtr->LoadSynchronous() : nullptr;
+
 	if (!WidgetClass)
 	{
-		return;
-	}
+		// Sin Widget Blueprint asignado: menú integrado.
+		UGameViewportClient* Viewport = GetGameInstance() ? GetGameInstance()->GetGameViewportClient() : nullptr;
+		if (!Viewport)
+		{
+			return;
+		}
 
-	APlayerController* Controller = GetLocalController();
-	if (!Controller)
-	{
+		TSharedRef<SShooterMenuScreen> Screenwidget = SNew(SShooterMenuScreen)
+			.Menu(this)
+			.Screen(Screen);
+		SlateWidget = Screenwidget;
+		Viewport->AddViewportWidgetContent(Screenwidget, 20);
+
+		if (FSlateApplication::IsInitialized())
+		{
+			FSlateApplication::Get().SetKeyboardFocus(Screenwidget);
+		}
 		return;
 	}
 
@@ -126,6 +138,15 @@ void UShooterMenuSubsystem::RemoveActiveWidget()
 		ActiveWidget->RemoveFromParent();
 		ActiveWidget = nullptr;
 	}
+
+	if (SlateWidget.IsValid())
+	{
+		if (UGameViewportClient* Viewport = GetGameInstance() ? GetGameInstance()->GetGameViewportClient() : nullptr)
+		{
+			Viewport->RemoveViewportWidgetContent(SlateWidget.ToSharedRef());
+		}
+		SlateWidget.Reset();
+	}
 }
 
 void UShooterMenuSubsystem::UpdateInputMode()
@@ -137,6 +158,19 @@ void UShooterMenuSubsystem::UpdateInputMode()
 	}
 
 	const bool bMenuOpen = IsMenuOpen();
+
+	if (bMenuOpen != bLookInputIgnored)
+	{
+		bLookInputIgnored = bMenuOpen;
+		if (bMenuOpen)
+		{
+			Controller->SetIgnoreLookInput(true);
+		}
+		else
+		{
+			Controller->ResetIgnoreLookInput();
+		}
+	}
 
 	if (bMenuOpen)
 	{
@@ -153,6 +187,13 @@ void UShooterMenuSubsystem::UpdateInputMode()
 
 	Controller->SetInputMode(FInputModeGameOnly());
 	Controller->SetShowMouseCursor(false);
+
+	// Al cerrar el menú el foco vuelve al juego: sin esto la primera tecla
+	// iría a un widget que ya no existe.
+	if (FSlateApplication::IsInitialized())
+	{
+		FSlateApplication::Get().SetAllUserFocusToGameViewport();
+	}
 }
 
 void UShooterMenuSubsystem::QuitGame()
@@ -180,4 +221,11 @@ void UShooterMenuSubsystem::StartMatch(FName LevelName)
 	CloseMenu();
 
 	UGameplayStatics::OpenLevel(GetGameInstance(), LevelName);
+}
+
+void UShooterMenuSubsystem::StartMatchWithOptions(FName LevelName, const FString& Options)
+{
+	CloseMenu();
+
+	UGameplayStatics::OpenLevel(GetGameInstance(), LevelName, true, Options);
 }

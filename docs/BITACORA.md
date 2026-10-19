@@ -420,11 +420,111 @@ armas siguen siendo los de la plantilla.
 
 ---
 
+## Fase 7 — El Distrito como nivel completo
+
+Objetivo: que `Lvl_Distrito` se pueda jugar de principio a fin con aspecto
+realista, usando solo lo que ya trae el proyecto (maniquíes, mallas de
+fusil y pistola, animaciones de la plantilla, un sonido de disparo).
+
+| Pieza | Clase / archivo |
+|---|---|
+| Brazos en primera persona que sostienen el arma | `UShooterFirstPersonComponent`, `AShooterCharacter::FirstPersonArms` |
+| Cuerpo animado con el arma para los demás, maniquí y tinte por equipo | `AShooterCharacter::HandleWeaponChanged`, `UpdateTeamAppearance` |
+| Malla de arma doble (mundo y primera persona), visor holográfico y de aumentos | `AWeaponBase::BuildViewFrame`, `LayoutSight` |
+| Fogonazo, trazadoras, casquillos, impactos, explosión, fuego con humo | `Effects/` (`ShooterEffects`, `AShooterTracer`, `AShooterShellCasing`, `AShooterImpactEffect`, `AShooterLightFlash`, `AShooterFireSource`) |
+| Equipamiento (arma principal) | `PrimaryWeaponOptions`, `Server_SelectPrimaryWeapon` |
+| Bots que juegan de verdad | `AShooterBotController` reescrito |
+| Menús completos sin assets | `SShooterMenuScreen` (Slate), `AShooterMenuGameMode` |
+| Mapa con detalle, fuegos, cráteres, luz dorada, decorado del menú | `build_realistic_map.py` |
+
+### Fallos que impedían jugar el nivel
+
+Encontrados al revisar el código, antes de escribir nada nuevo:
+
+- **Los bots no tenían `PlayerState`.** `AAIController` no lo crea si no se
+  pide (`bWantsPlayerState`). Sin él no había equipo: todos los bots se
+  disparaban entre sí y `SpawnBot` intentaba asignar equipo a un puntero nulo.
+- **Un bot muerto no contaba ni volvía.** La muerte solo avisaba al modo de
+  juego si el controlador era un `AShooterPlayerController`: matar bots no
+  daba puntos y la partida se iba quedando vacía.
+- **Los bots no podían apuntar arriba ni abajo.** Dos causas: el disparo
+  salía de la orientación de la cámara, que solo gira para el jugador que
+  mira a través de ella (`bUsePawnControlRotation` se aplica en
+  `GetCameraView`), y `AAIController` reescribía cada fotograma la rotación
+  de control con la del cuerpo (`bSetControlRotationFromPawnOrientation`),
+  borrando el cabeceo. Ahora el arma usa `AShooterCharacter::GetAimRotation`
+  y el bot gira su propia vista.
+- **Los bots disparaban a través de las paredes**: elegían al enemigo más
+  cercano sin línea de visión.
+- **El menú no mostraba nada.** Los seis `WBP_*` estaban vacíos y no había
+  ninguno asignado: `Esc` abría una "pausa" invisible que solo sacaba el
+  cursor.
+- **`G` no lanzaba nada**: `GrenadeClass` nunca se asignó. Ahora tiene la
+  clase C++ por defecto.
+- **El equipo se asignaba después de aparecer** (en `PostLogin`, tras
+  `Super`), y los puntos de aparición no distinguían equipos.
+
+### Decisiones
+
+**El arma se coloca respecto a la cámara y los brazos la siguen**, no al
+revés. Con los brazos animados y el arma en la mano, la mira solo quedaría
+alineada si la animación lo estuviera para esa malla concreta. Fijando el
+arma (mira en el eje al apuntar) y resolviendo los brazos como
+mano⁻¹ · arma, apuntar siempre funciona, y la mano izquierda sigue en el
+guardamanos porque su posición relativa a la derecha sale de la animación.
+
+**El componente de primera persona hace *tick* en `TG_PostUpdateWork`**:
+lee el socket de la mano con la pose ya evaluada de ese fotograma. Antes de
+la animación, el arma iría un fotograma por detrás y temblaría.
+
+**Los ejes del arma se deducen de la malla.** Las mallas de la plantilla no
+traen socket de mira ni eje documentado: el eje largo de la caja es el cañón
+(orientado hacia `Muzzle`) y el más alto de los otros dos, la vertical. Hay
+un ajuste manual en el DataAsset por si una malla nueva no encaja.
+
+**Efectos sin Niagara, con mallas básicas.** No hay sistemas de partículas en
+el proyecto y crearlos por Python no es fiable. Los efectos son actores
+cosméticos locales; si un DataAsset trae un Niagara, se usa ese.
+
+**Menús en Slate y no en UMG.** Un Widget Blueprint hay que maquetarlo en el
+editor; Slate se escribe en C++ y funciona desde la primera compilación. El
+subsistema usa el `WBP_*` si alguien lo asigna.
+
+**La munición de los bots se dispara pulsación a pulsación.** El bot llama a
+`TryStartFire` + `StopFire` con su propia cadencia: así controla ráfagas y
+tiro a tiro con cualquier arma, sin depender del modo del selector.
+
+**Los materiales de efectos se rehacen enteros** en cada ejecución del
+script (`delete_all_material_expressions`): un cambio en el grafo llega
+siempre, sin restos del anterior.
+
+**Lo que el C++ carga por ruta se cocina explícitamente**
+(`DirectoriesToAlwaysCook` en `DefaultGame.ini`): sin referencia dura, el
+empaquetado lo dejaría fuera.
+
+### Sin probar
+
+Compila sin errores ni avisos, pero **no se ha ejecutado el script ni se ha
+jugado**: no se abrió el editor en esta sesión. Lo más probable que haya que
+retocar al probar:
+
+- Posición del arma a la cadera (`HipSightOffset`) y del visor holográfico
+  sobre el fusil de la plantilla.
+- Que la deducción de ejes acierte con `SKM_Rifle` y `SKM_Pistol` (si el
+  arma sale girada, fijar `SightLocation` o revisar `BuildViewFrame`).
+- Intensidades de luz y emisivos de fogonazo, fuego y trazadora frente a la
+  exposición automática.
+- Nombres de propiedades de Python que cambien en 5.8 (el script avisa de
+  cada una que falle sin abortar).
+
+---
+
 ## Cómo retomar el proyecto
 
-1. Abrir `Shoter.uproject` (compila el C++ al arrancar)
-2. Abrir `Content/Maps/Lvl_Entrenamiento`
-3. Play
+1. Compilar con el editor cerrado (ver `PROMPT_CONTINUIDAD.md`)
+2. Abrir `Shoter.uproject` y ejecutar `Content/Python/build_realistic_map.py`
+3. El editor abre `Lvl_Distrito`: Play. El juego empaquetado arranca en
+   `Lvl_Menu`
 
 Si algo falla, el registro de Unreal (`Saved/Logs/Shoter.log`) dice qué. Los
 scripts escriben con el prefijo de su nombre: `[entrenamiento]`, `[camara]`,

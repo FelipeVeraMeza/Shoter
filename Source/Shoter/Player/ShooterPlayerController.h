@@ -5,6 +5,7 @@
 #include "ShooterPlayerController.generated.h"
 
 class USoundBase;
+class AWeaponBase;
 
 UCLASS()
 class SHOTER_API AShooterPlayerController : public APlayerController
@@ -58,6 +59,29 @@ public:
 
 	/** Solo servidor. Informa al modo de juego y programa la reaparición. */
 	void OnCharacterDied(AController* Killer);
+
+	// --- Equipamiento ---
+
+	/**
+	 * Elige el arma principal para la próxima aparición. El servidor solo la
+	 * acepta si está entre las que ofrece el modo de juego (RNF-3.2).
+	 */
+	void RequestPrimaryWeapon(TSubclassOf<AWeaponBase> WeaponClass);
+
+	UFUNCTION(Server, Reliable)
+	void Server_SelectPrimaryWeapon(TSubclassOf<AWeaponBase> WeaponClass);
+
+	/** Momento en que se eligió arma, para que el HUD lo confirme un rato. */
+	float GetTimeSinceLoadoutChange() const;
+
+	// --- Ayuda de controles ---
+
+	/** Lista de controles en pantalla, con F1. */
+	UFUNCTION(BlueprintPure, Category = "HUD")
+	bool IsControlsHelpVisible() const { return bShowControlsHelp; }
+
+	/** Segundos desde la última aparición, para mostrar el recordatorio de teclas. */
+	float GetTimeSinceSpawn() const;
 
 	UFUNCTION(BlueprintPure, Category = "HUD")
 	float GetTimeSinceHitConfirmed() const;
@@ -154,6 +178,16 @@ private:
 
 	UPROPERTY(Replicated)
 	float RespawnWorldTime = 0.f;
+
+	bool bShowControlsHelp = false;
+	float LastLoadoutChangeTime = -1000.f;
+	float LastSpawnTime = 0.f;
+
+	/** Teclas que no pasan por Enhanced Input: ayuda (F1) y equipamiento (L). */
+	void PollMenuKeys();
+
+	virtual void OnPossess(APawn* InPawn) override;
+	virtual void AcknowledgePossession(APawn* InPawn) override;
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

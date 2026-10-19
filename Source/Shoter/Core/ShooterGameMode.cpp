@@ -14,6 +14,28 @@
 #include "GameFramework/PlayerStart.h"
 #include "EngineUtils.h"
 #include "TimerManager.h"
+#include "Kismet/GameplayStatics.h"
+
+namespace
+{
+	/** Etiqueta de los puntos de aparición de cada equipo (PlayerStartTag). */
+	FName GetTeamStartTag(EShooterTeam Team)
+	{
+		switch (Team)
+		{
+		case EShooterTeam::Alpha: return TEXT("Alfa");
+		case EShooterTeam::Bravo: return TEXT("Bravo");
+		default:                  return NAME_None;
+		}
+	}
+
+	/** Indicativos de radio para los bots: un nombre se recuerda mejor que "Bot 3". */
+	const TCHAR* const BotCallsigns[] = {
+		TEXT("Halcón"), TEXT("Lobo"), TEXT("Cuervo"), TEXT("Tejón"), TEXT("Zorro"), TEXT("Puma"),
+		TEXT("Búho"), TEXT("Lince"), TEXT("Jabalí"), TEXT("Águila"), TEXT("Coyote"), TEXT("Oso"),
+		TEXT("Víbora"), TEXT("Gavilán"), TEXT("Toro"), TEXT("Cóndor")
+	};
+}
 
 AShooterGameMode::AShooterGameMode()
 {
@@ -24,9 +46,48 @@ AShooterGameMode::AShooterGameMode()
 	HUDClass = AShooterHUD::StaticClass();
 }
 
+void AShooterGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
+{
+	Super::InitGame(MapName, Options, ErrorMessage);
+
+	// Opciones que llegan desde el menú en la URL del nivel
+	// ("Lvl_Distrito?modo=dominacion?jugadores=8").
+	const FString Mode = UGameplayStatics::ParseOption(Options, TEXT("modo"));
+	if (Mode == TEXT("dominacion"))
+	{
+		GameModeType = EShooterGameModeType::Domination;
+		bTeamBased = true;
+
+		// Las zonas suman un punto por segundo cada una: 300 es dominar dos
+		// zonas durante dos minutos y medio largos.
+		ScoreToWin = 300;
+	}
+	else if (Mode == TEXT("todos"))
+	{
+		GameModeType = EShooterGameModeType::FreeForAll;
+		bTeamBased = false;
+		ScoreToWin = 25;
+	}
+	else if (Mode == TEXT("equipos"))
+	{
+		GameModeType = EShooterGameModeType::TeamDeathmatch;
+		bTeamBased = true;
+	}
+
+	if (UGameplayStatics::HasOption(Options, TEXT("jugadores")))
+	{
+		DesiredPlayerCount = FMath::Clamp(UGameplayStatics::GetIntOption(Options, TEXT("jugadores"), DesiredPlayerCount), 0, 16);
+	}
+}
+
 void AShooterGameMode::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (AShooterGameState* ShooterGameState = GetGameState<AShooterGameState>())
+	{
+		ShooterGameState->SetPrimaryWeaponOptions(PrimaryWeaponOptions);
+	}
 
 	StartMatch();
 }
@@ -95,6 +156,51 @@ void AShooterGameMode::FinishMatch()
 	GetWorldTimerManager().ClearTimer(DominationCheckHandle);
 
 	AwardEndOfMatchExperience();
+
+	// Los bots dejan de pelear con la tabla final en pantalla.
+	for (AAIController* BotController : BotControllers)
+	{
+		if (BotController)
+		{
+			BotController->StopMovement();
+			if (AShooterCharacter* Bot = Cast<AShooterCharacter>(BotController->GetPawn()))
+			{
+				if (AWeaponBase* Weapon = Bot->GetCurrentWeapon())
+				{
+					Weapon->StopFire();
+				}
+			}
+		}
+	}
+
+	if (PostMatchRestartDelay > 0.f && !bEndlessMatch)
+	{
+		GetWorldTimerManager().SetTimer(RestartTimerHandle, this, &AShooterGameMode::RestartMatch,
+			PostMatchRestartDelay, false);
+	}
+}
+
+void AShooterGameMode::RestartMatch()
+{
+	// Recarga el nivel con las mismas opciones: misma modalidad, mismos
+	// jugadores. Abandonar la partida sigue disponible en el menú de pausa.
+	GetWorld()->ServerTravel(TEXT("?Restart"), false);
+}
+
+int32 AShooterGameMode::CountHumanPlayers() const
+{
+	int32 Count = 0;
+	if (const AGameStateBase* CurrentState = GameState)
+	{
+		for (const APlayerState* PlayerState : CurrentState->PlayerArray)
+		{
+			if (PlayerState && !PlayerState->IsABot())
+			{
+				++Count;
+			}
+		}
+	}
+	return Count;
 }
 
 void AShooterGameMode::AwardEndOfMatchExperience()
@@ -147,9 +253,10 @@ void AShooterGameMode::FillWithBots()
 		return;
 	}
 
-	const AGameStateBase* CurrentState = GameState;
-	const int32 HumanCount = CurrentState ? CurrentState->PlayerArray.Num() : 0;
-	const int32 Missing = DesiredPlayerCount - HumanCount - SpawnedBots.Num();
+	// Los bots también tienen PlayerState (para equipo, nombre y marcador):
+	// los humanos se cuentan aparte.
+	const int32 HumanCount = CountHumanPlayers();
+	const int32 Missing = DesiredPlayerCount - HumanCount - BotControllers.Num();
 
 	for (int32 Index = 0; Index < Missing; ++Index)
 	{
@@ -182,7 +289,46 @@ void AShooterGameMode::SpawnBot()
 		return;
 	}
 
-	// ChoosePlayerStart aplica también a los bots: aparecen lejos del enemigo.
+	// Equipo, nombre y arma se deciden antes de aparecer: el punto de
+	// aparición depende del equipo, y el arma se crea al poseer el pawn.
+	if (AShooterPlayerState* BotState = BotController->GetPlayerState<AShooterPlayerState>())
+	{
+		if (bTeamBased)
+		{
+			BotState->SetTeam(ChooseTeamForNewPlayer());
+		}
+
+		const int32 NameCount = UE_ARRAY_COUNT(BotCallsigns);
+		const int32 Round = BotNameIndex / NameCount;
+		BotState->SetPlayerName(Round == 0
+			? FString(BotCallsigns[BotNameIndex % NameCount])
+			: FString::Printf(TEXT("%s %d"), BotCallsigns[BotNameIndex % NameCount], Round + 1));
+		++BotNameIndex;
+
+		if (PrimaryWeaponOptions.Num() > 1 && FMath::FRand() < MarksmanBotChance)
+		{
+			BotState->SetPreferredPrimary(PrimaryWeaponOptions[1]);
+		}
+	}
+
+	BotControllers.Add(BotController);
+
+	if (!SpawnPawnForBot(BotController))
+	{
+		BotControllers.Remove(BotController);
+		BotController->Destroy();
+	}
+}
+
+bool AShooterGameMode::SpawnPawnForBot(AAIController* BotController)
+{
+	if (!BotController || !DefaultPawnClass)
+	{
+		return false;
+	}
+
+	// ChoosePlayerStart aplica también a los bots: aparecen en su lado y
+	// lejos del enemigo.
 	AActor* StartSpot = ChoosePlayerStart(BotController);
 	const FTransform SpawnTransform = StartSpot
 		? StartSpot->GetActorTransform()
@@ -192,41 +338,78 @@ void AShooterGameMode::SpawnBot()
 	PawnParams.SpawnCollisionHandlingOverride =
 		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-	APawn* BotPawn = GetWorld()->SpawnActor<APawn>(
-		DefaultPawnClass, SpawnTransform, PawnParams);
-
+	APawn* BotPawn = GetWorld()->SpawnActor<APawn>(DefaultPawnClass, SpawnTransform, PawnParams);
 	if (!BotPawn)
 	{
-		BotController->Destroy();
-		return;
+		return false;
 	}
 
 	BotController->Possess(BotPawn);
-	SpawnedBots.Add(BotPawn);
+	BotController->SetControlRotation(SpawnTransform.Rotator());
+	return true;
+}
 
-	// Los bots también se reparten entre equipos, igual que los humanos.
-	if (bTeamBased)
+void AShooterGameMode::RespawnBot(AAIController* BotController)
+{
+	if (!BotController)
 	{
-		if (AShooterPlayerState* BotState = BotController->GetPlayerState<AShooterPlayerState>())
-		{
-			BotState->SetTeam(ChooseTeamForNewPlayer());
-		}
+		return;
 	}
+
+	const AShooterGameState* ShooterGameState = GetGameState<AShooterGameState>();
+	if (ShooterGameState && ShooterGameState->GetMatchPhase() != EMatchPhase::InProgress)
+	{
+		return;
+	}
+
+	if (APawn* OldPawn = BotController->GetPawn())
+	{
+		BotController->UnPossess();
+		OldPawn->Destroy();
+	}
+
+	SpawnPawnForBot(BotController);
+}
+
+void AShooterGameMode::OnBotKilled(AController* Victim, AController* Killer)
+{
+	AAIController* BotController = Cast<AAIController>(Victim);
+	if (!BotController)
+	{
+		return;
+	}
+
+	RegisterKill(Victim, Killer);
+
+	// Solo reaparecen los bots de relleno: los enemigos de Oleadas los
+	// gestiona su propio gestor.
+	if (!BotControllers.Contains(BotController))
+	{
+		CheckWinCondition();
+		return;
+	}
+
+	FTimerHandle RespawnTimer;
+	FTimerDelegate RespawnDelegate;
+	RespawnDelegate.BindUObject(this, &AShooterGameMode::RespawnBot, BotController);
+	GetWorldTimerManager().SetTimer(RespawnTimer, RespawnDelegate, RespawnDelay, false);
+
+	CheckWinCondition();
 }
 
 void AShooterGameMode::PostLogin(APlayerController* NewPlayer)
 {
+	// El equipo se asigna antes de Super: Super hace aparecer al jugador, y
+	// el punto de aparición depende del equipo.
+	if (bTeamBased)
+	{
+		if (AShooterPlayerState* ShooterPlayerState = NewPlayer ? NewPlayer->GetPlayerState<AShooterPlayerState>() : nullptr)
+		{
+			ShooterPlayerState->SetTeam(ChooseTeamForNewPlayer());
+		}
+	}
+
 	Super::PostLogin(NewPlayer);
-
-	if (!bTeamBased)
-	{
-		return;
-	}
-
-	if (AShooterPlayerState* ShooterPlayerState = NewPlayer ? NewPlayer->GetPlayerState<AShooterPlayerState>() : nullptr)
-	{
-		ShooterPlayerState->SetTeam(ChooseTeamForNewPlayer());
-	}
 }
 
 EShooterTeam AShooterGameMode::ChooseTeamForNewPlayer() const
@@ -262,6 +445,59 @@ void AShooterGameMode::OnPlayerKilled(AShooterPlayerController* Victim, AControl
 		return;
 	}
 
+	RegisterKill(Victim, Killer);
+
+	FString KillerName = TEXT("El entorno");
+	FString WeaponName = TEXT("");
+	if (Killer && Killer != Victim)
+	{
+		if (const AShooterPlayerState* KillerState = Killer->GetPlayerState<AShooterPlayerState>())
+		{
+			KillerName = KillerState->GetPlayerName();
+		}
+		if (const AShooterCharacter* KillerPawn = Cast<AShooterCharacter>(Killer->GetPawn()))
+		{
+			if (const AWeaponBase* Weapon = KillerPawn->GetCurrentWeapon())
+			{
+				if (const UWeaponDataAsset* Data = Weapon->WeaponData)
+				{
+					WeaponName = Data->DisplayName.ToString();
+				}
+			}
+		}
+	}
+	else if (Killer == Victim)
+	{
+		KillerName = TEXT("Suicidio");
+	}
+
+	Victim->Client_NotifyKilledBy(KillerName, WeaponName);
+
+	// Enfocar al asesino durante la espera (RF-6.7). Se envía el pawn y no el
+	// controlador porque el cliente solo recibe actores relevantes para él.
+	if (Killer && Killer != Victim)
+	{
+		Victim->Client_StartKillCam(Killer->GetPawn());
+	}
+
+	const float RespawnWorldTime = GetWorld()->GetTimeSeconds() + RespawnDelay;
+	Victim->SetRespawnTime(RespawnWorldTime);
+
+	FTimerHandle RespawnTimer;
+	FTimerDelegate RespawnDelegate;
+	RespawnDelegate.BindUObject(this, &AShooterGameMode::RespawnPlayer, Victim);
+	GetWorldTimerManager().SetTimer(RespawnTimer, RespawnDelegate, RespawnDelay, false);
+
+	CheckWinCondition();
+}
+
+void AShooterGameMode::RegisterKill(AController* Victim, AController* Killer)
+{
+	if (!Victim)
+	{
+		return;
+	}
+
 	AShooterGameState* ShooterGameState = GetGameState<AShooterGameState>();
 
 	AShooterPlayerState* VictimState = Victim->GetPlayerState<AShooterPlayerState>();
@@ -273,10 +509,20 @@ void AShooterGameMode::OnPlayerKilled(AShooterPlayerController* Victim, AControl
 	FString KillerName = TEXT("El entorno");
 	FString WeaponName = TEXT("");
 
-	// Un jugador no suma por eliminarse a sí mismo.
+	// Un jugador no suma por eliminarse a sí mismo ni por abatir a un
+	// compañero: el fuego amigo existe, pero no puntúa.
 	if (Killer && Killer != Victim)
 	{
-		if (AShooterPlayerState* KillerState = Killer->GetPlayerState<AShooterPlayerState>())
+		AShooterPlayerState* KillerState = Killer->GetPlayerState<AShooterPlayerState>();
+		const bool bTeamKill = bTeamBased && KillerState && VictimState
+			&& KillerState->GetTeam() != EShooterTeam::None
+			&& KillerState->GetTeam() == VictimState->GetTeam();
+
+		if (KillerState && bTeamKill)
+		{
+			KillerName = KillerState->GetPlayerName();
+		}
+		else if (KillerState)
 		{
 			KillerState->AddKill();
 			KillerName = KillerState->GetPlayerName();
@@ -306,7 +552,7 @@ void AShooterGameMode::OnPlayerKilled(AShooterPlayerController* Victim, AControl
 		KillerName = TEXT("Suicidio");
 	}
 
-	// Registro visible para todos (RF-7.7) y aviso a la víctima (RF-6.6).
+	// Registro visible para todos (RF-7.7).
 	if (ShooterGameState)
 	{
 		const FString VictimName = VictimState
@@ -314,25 +560,6 @@ void AShooterGameMode::OnPlayerKilled(AShooterPlayerController* Victim, AControl
 
 		ShooterGameState->AddKillEvent(KillerName, VictimName, WeaponName, false);
 	}
-
-	Victim->Client_NotifyKilledBy(KillerName, WeaponName);
-
-	// Enfocar al asesino durante la espera (RF-6.7). Se envía el pawn y no el
-	// controlador porque el cliente solo recibe actores relevantes para él.
-	if (Killer && Killer != Victim)
-	{
-		Victim->Client_StartKillCam(Killer->GetPawn());
-	}
-
-	const float RespawnWorldTime = GetWorld()->GetTimeSeconds() + RespawnDelay;
-	Victim->SetRespawnTime(RespawnWorldTime);
-
-	FTimerHandle RespawnTimer;
-	FTimerDelegate RespawnDelegate;
-	RespawnDelegate.BindUObject(this, &AShooterGameMode::RespawnPlayer, Victim);
-	GetWorldTimerManager().SetTimer(RespawnTimer, RespawnDelegate, RespawnDelay, false);
-
-	CheckWinCondition();
 }
 
 void AShooterGameMode::CheckWinCondition()
@@ -408,6 +635,37 @@ AActor* AShooterGameMode::ChoosePlayerStart_Implementation(AController* Player)
 	const AShooterPlayerState* PlayerTeamState = Player ? Player->GetPlayerState<AShooterPlayerState>() : nullptr;
 	const EShooterTeam PlayerTeam = PlayerTeamState ? PlayerTeamState->GetTeam() : EShooterTeam::None;
 	const APawn* PlayerPawn = Player ? Player->GetPawn() : nullptr;
+
+	// Con equipos, cada uno aparece en su lado del mapa: los puntos llevan la
+	// etiqueta del equipo. Si el mapa no los etiqueta, valen todos.
+	const FName TeamTag = bTeamBased ? GetTeamStartTag(PlayerTeam) : NAME_None;
+	if (!TeamTag.IsNone())
+	{
+		TArray<APlayerStart*> TeamStarts = Candidates.FilterByPredicate(
+			[TeamTag](const APlayerStart* Start) { return Start && Start->PlayerStartTag == TeamTag; });
+		if (TeamStarts.Num() > 0)
+		{
+			Candidates = MoveTemp(TeamStarts);
+		}
+	}
+
+	// Un punto con alguien encima haría aparecer a dos personajes solapados.
+	TArray<APlayerStart*> FreeStarts = Candidates.FilterByPredicate([this, PlayerPawn](const APlayerStart* Start)
+	{
+		for (TActorIterator<AShooterCharacter> It(GetWorld()); It; ++It)
+		{
+			if (*It != PlayerPawn && !It->IsDead()
+				&& FVector::DistSquared2D(It->GetActorLocation(), Start->GetActorLocation()) < FMath::Square(150.f))
+			{
+				return false;
+			}
+		}
+		return true;
+	});
+	if (FreeStarts.Num() > 0)
+	{
+		Candidates = MoveTemp(FreeStarts);
+	}
 
 	APlayerStart* BestStart = nullptr;
 	float BestDistanceToEnemy = -1.f;

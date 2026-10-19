@@ -21,47 +21,19 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Inventario")
 	FOnWeaponChanged OnWeaponChanged;
 
-	/** Armas con las que aparece el jugador: principal y secundaria. */
+	/**
+	 * Armas con las que aparece el jugador: principal y secundaria. La
+	 * principal puede sustituirla la elegida en la pantalla de equipamiento.
+	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventario")
 	TArray<TSubclassOf<AWeaponBase>> DefaultWeapons;
 
 	/**
-	 * Colocación del arma respecto a la cámara, mientras el personaje no tenga
-	 * un socket de mano. Adelante, a la derecha y algo por debajo del centro.
+	 * Socket de la mano derecha del cuerpo donde se lleva el arma. El
+	 * esqueleto del maniquí lo trae; sin él se usa el hueso de la mano.
 	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventario|Vista")
-	FVector FirstPersonOffset = FVector(40.f, 16.f, -18.f);
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventario|Vista")
-	FRotator FirstPersonRotation = FRotator(0.f, 0.f, 0.f);
-
-	/** Las mallas de arma suelen ser de tamaño real: en vista de cañón estorban. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventario|Vista",
-		meta = (ClampMin = "0.05", ClampMax = "2.0"))
-	float FirstPersonScale = 0.12f;
-
-	/**
-	 * Balanceo del arma al caminar (RF5). Da sensación de peso: sin él el
-	 * arma parece pegada a la pantalla.
-	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventario|Balanceo",
-		meta = (ClampMin = "0.0"))
-	float BobAmount = 1.6f;
-
-	/** Ciclos de balanceo por segundo a velocidad de marcha. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventario|Balanceo",
-		meta = (ClampMin = "0.1"))
-	float BobFrequency = 7.f;
-
-	/** Cuánto se amplifica el balanceo al correr. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventario|Balanceo",
-		meta = (ClampMin = "1.0"))
-	float SprintBobMultiplier = 1.8f;
-
-	/** Rapidez con que el arma vuelve al centro al detenerse. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventario|Balanceo",
-		meta = (ClampMin = "0.1"))
-	float BobRecoverySpeed = 8.f;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventario")
+	FName HandSocket = TEXT("HandGrip_R");
 
 	UFUNCTION(BlueprintPure, Category = "Inventario")
 	AWeaponBase* GetCurrentWeapon() const { return CurrentWeapon; }
@@ -77,8 +49,6 @@ public:
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
-		FActorComponentTickFunction* ThisTickFunction) override;
 
 private:
 	UPROPERTY(Replicated)
@@ -98,12 +68,6 @@ private:
 	void AttachWeaponToOwner(AWeaponBase* Weapon);
 	AShooterCharacter* GetShooterOwner() const;
 
-	/** Balanceo del arma según la velocidad del portador (RF5). */
-	void UpdateWeaponBob(float DeltaTime);
-
-	/** Fase del ciclo de balanceo, en radianes. */
-	float BobPhase = 0.f;
-
-	/** Desplazamiento actual, interpolado para que no dé saltos. */
-	FVector CurrentBobOffset = FVector::ZeroVector;
+	/** Armas con las que aparece, con la principal elegida por el jugador. */
+	TArray<TSubclassOf<AWeaponBase>> GetLoadout() const;
 };

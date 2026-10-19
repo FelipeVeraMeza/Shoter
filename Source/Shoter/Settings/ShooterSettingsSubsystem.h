@@ -203,6 +203,12 @@ private:
 	/** Reenvía los cuatro canales; se llama al arrancar y al cambiar uno. */
 	void ApplyAllVolumes();
 
+	/**
+	 * Sin Sound Class maestra asignada, el volumen general se aplica al
+	 * dispositivo de audio: así el deslizador funciona desde el primer día.
+	 */
+	void ApplyPrimaryVolumeFallback();
+
 	/** Guarda el perfil sin tocar los ajustes de vídeo. */
 	void SaveProfile();
 };

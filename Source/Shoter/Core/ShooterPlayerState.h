@@ -5,6 +5,8 @@
 #include "ShooterTypes.h"
 #include "ShooterPlayerState.generated.h"
 
+class AWeaponBase;
+
 UCLASS()
 class SHOTER_API AShooterPlayerState : public APlayerState
 {
@@ -26,6 +28,13 @@ public:
 	void AddKill();
 	void AddDeath();
 
+	/** Arma principal elegida en la pantalla de equipamiento; vacío = la de fábrica. */
+	UFUNCTION(BlueprintPure, Category = "Equipamiento")
+	TSubclassOf<AWeaponBase> GetPreferredPrimary() const { return PreferredPrimary; }
+
+	/** Solo servidor, con la elección ya validada. Se aplica al reaparecer. */
+	void SetPreferredPrimary(TSubclassOf<AWeaponBase> WeaponClass) { PreferredPrimary = WeaponClass; }
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -38,4 +47,7 @@ private:
 
 	UPROPERTY(Replicated)
 	EShooterTeam Team = EShooterTeam::None;
+
+	UPROPERTY(Replicated)
+	TSubclassOf<AWeaponBase> PreferredPrimary;
 };

@@ -367,7 +367,7 @@ void UShooterBallisticsSubsystem::ApplyCharacterHit(FShooterBullet& Bullet, ASho
 
 	if (AWeaponBase* Weapon = Bullet.Weapon.Get())
 	{
-		Weapon->BroadcastImpact(ImpactPoint, -Direction, nullptr);
+		Weapon->BroadcastImpact(ImpactPoint, -Direction, nullptr, true);
 	}
 }
 

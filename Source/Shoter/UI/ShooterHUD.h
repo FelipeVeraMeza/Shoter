@@ -90,4 +90,16 @@ private:
 
 	/** Convierte un ángulo de dispersión en separación de la mira, en píxeles. */
 	float SpreadDegreesToPixels(float SpreadDegrees) const;
+
+	/**
+	 * Imagen a través del visor de aumentos: campo circular, retícula de
+	 * hilos con postes gruesos y el resto de la pantalla en negro.
+	 */
+	void DrawScopeOverlay();
+
+	/** Lista de controles (F1). */
+	void DrawControlsHelp();
+
+	/** Recordatorio de teclas al aparecer y confirmación del equipamiento. */
+	void DrawHints(AShooterPlayerController* Controller);
 };

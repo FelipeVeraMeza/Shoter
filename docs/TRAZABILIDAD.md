@@ -18,10 +18,10 @@ contra el código del proyecto.
 
 | Prioridad | Total | ✅ | 🔶 | ❌ / 🔒 |
 |---|---:|---:|---:|---:|
-| 🔴 Must | 58 | 41 | 2 | 15 |
+| 🔴 Must | 58 | 43 | 0 | 15 |
 | 🟡 Should | 30 | 17 | 1 | 12 |
 | 🟢 Could | 12 | 4 | 0 | 8 |
-| **RF total** | **100** | **62** | **3** | **35** |
+| **RF total** | **100** | **64** | **1** | **35** |
 | **RNF total** | **52** | **17** | **6** | **29** |
 
 El núcleo de combate está completo. Lo que falta se concentra en: cuenta y
@@ -33,6 +33,18 @@ por las tres dependencias externas.
 > editor (widgets UMG) o de contenido (7 armas y 3 mapas que faltan).
 
 ### Qué cambió en la última sesión
+
+Fase 7 (detalle en [REALISMO.md](REALISMO.md) y la bitácora): primera
+persona con brazos, visores, efectos sin Niagara, equipamiento, bots
+reescritos, menús en Slate y el Distrito como nivel completo. Compilado, sin
+jugar todavía.
+
+| Requerimiento | Antes | Ahora |
+|---|:--:|:--:|
+| RF-2.1 Menú principal | 🔶 | ✅ `SShooterMenuScreen` en Slate, sin depender de los `WBP_*` |
+| RF-2.2 Elegir modo | 🔶 | ✅ Pantalla *Jugar*: modo y jugadores por URL, leídos en `InitGame` |
+| RF-3.6 Bots de relleno | ✅ | ✅ Ahora con `PlayerState`, equipo, reaparición y línea de visión |
+| RF-5.11 Granadas | ✅ | ✅ `GrenadeClass` por defecto: antes `G` no lanzaba nada |
 
 | Requerimiento | Antes | Ahora |
 |---|:--:|:--:|
@@ -65,8 +77,8 @@ por las tres dependencias externas.
 
 | ID | Pri | Estado | Dónde / por qué |
 |---|:--:|:--:|---|
-| RF-2.1 Menú principal | 🔴 | 🔶 | `ShooterMenuSubsystem` navega entre 6 pantallas; faltan los widgets visuales |
-| RF-2.2 Elegir modo | 🔴 | 🔶 | `StartMatch(LevelName)` listo; falta la pantalla que lo llame |
+| RF-2.1 Menú principal | 🔴 | ✅ | `ShooterMenuSubsystem` + `SShooterMenuScreen` (Slate): principal, jugar, opciones, controles, equipamiento, progresión, pausa |
+| RF-2.2 Elegir modo | 🔴 | ✅ | Pantalla *Jugar*: Equipos, Dominación o Todos contra todos, y 4/8/12 jugadores |
 | RF-2.3 Ver nivel y XP | 🟡 | ✅ | `GetProgressSummary` y `GetStatsSummary` en `ShooterMenuWidget` |
 | RF-2.4 Salir del juego | 🔴 | ✅ | `QuitGame`, cierre ordenado del proceso |
 
@@ -278,7 +290,6 @@ escribiendo C++:
 
 | Tarea | Por qué no es código |
 |---|---|
-| Widgets del menú (RF-2.1, 2.2) | Los seis `WBP_*` existen pero vacíos. Colocar botones y enlazarlos a `OpenScreen`/`StartMatch` es arrastrar elementos en UMG |
 | Ejecutar `fix_gamepad.py` (RNF-4.5) | El script está escrito; requiere el editor abierto |
 | Ejecutar `fix_movimiento.py` | Confirma el bug de WASD |
 | Colocar `AControlZone` en un mapa | Dominación necesita tres zonas situadas a mano |

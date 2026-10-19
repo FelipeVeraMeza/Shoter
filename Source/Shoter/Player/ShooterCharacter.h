@@ -3,9 +3,12 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Core/RPCRateLimiter.h"
+#include "ShooterTypes.h"
 #include "ShooterCharacter.generated.h"
 
 class UCameraComponent;
+class USkeletalMesh;
+class UShooterFirstPersonComponent;
 class UHealthComponent;
 class UInventoryComponent;
 class ULagCompensationComponent;
@@ -33,6 +36,25 @@ public:
 	UInventoryComponent* GetInventory() const { return Inventory; }
 
 	ULagCompensationComponent* GetLagCompensation() const { return LagCompensation; }
+
+	/** Brazos que solo ve el propio jugador. */
+	USkeletalMeshComponent* GetFirstPersonArms() const { return FirstPersonArms; }
+
+	UShooterFirstPersonComponent* GetFirstPersonView() const { return FirstPersonView; }
+
+	/**
+	 * Hacia dónde apunta el personaje: la rotación de su controlador.
+	 *
+	 * No se usa la de la cámara porque solo gira la del jugador que mira a
+	 * través de ella; la de un bot se queda horizontal.
+	 */
+	FRotator GetAimRotation() const;
+
+	/** Para la IA: apuntar o dejar de apuntar con la mira. */
+	void SetWantsToAim(bool bWantsToAim);
+
+	/** Para la IA: vendarse si hay heridas y vendas. */
+	void RequestBandage();
 
 	UFUNCTION(BlueprintPure, Category = "Personaje")
 	AWeaponBase* GetCurrentWeapon() const;
@@ -267,6 +289,27 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Granadas")
 	int32 GetGrenadeCount() const { return GrenadeCount; }
 
+	// --- Aspecto por equipo ---
+	//
+	// Los dos maniquíes de la plantilla distinguen a los equipos a distancia,
+	// y el tinte de uniforme (verde oliva frente a arena) a media distancia.
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Equipo")
+	TObjectPtr<USkeletalMesh> AlphaTeamMesh;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Equipo")
+	TObjectPtr<USkeletalMesh> BravoTeamMesh;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Equipo")
+	FLinearColor AlphaTeamTint = FLinearColor(0.16f, 0.19f, 0.11f);
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Equipo")
+	FLinearColor BravoTeamTint = FLinearColor(0.42f, 0.34f, 0.22f);
+
+	/** Parámetro de color del material del maniquí. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Equipo")
+	FName TeamTintParameter = TEXT("Paint Tint");
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
@@ -292,6 +335,30 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Componentes")
 	TObjectPtr<ULagCompensationComponent> LagCompensation;
+
+	/**
+	 * Brazos de primera persona. Es el mismo maniquí que el cuerpo, con la
+	 * cabeza y las piernas ocultas, anclado a la cámara.
+	 */
+	UPROPERTY(VisibleAnywhere, Category = "Componentes")
+	TObjectPtr<USkeletalMeshComponent> FirstPersonArms;
+
+	UPROPERTY(VisibleAnywhere, Category = "Componentes")
+	TObjectPtr<UShooterFirstPersonComponent> FirstPersonView;
+
+	/** Equipo cuyo aspecto ya se aplicó, para no rehacerlo cada fotograma. */
+	EShooterTeam AppliedTeam = EShooterTeam::None;
+	bool bTeamAppearanceApplied = false;
+
+	/** Malla, tinte y brazos según el equipo del PlayerState. */
+	void UpdateTeamAppearance();
+
+	/** Copia al brazo la malla y los materiales del cuerpo. */
+	void SyncFirstPersonArms();
+
+	/** El cuerpo cambia de pose según el arma: fusil o pistola. */
+	UFUNCTION()
+	void HandleWeaponChanged(AWeaponBase* NewWeapon);
 
 	UPROPERTY(Replicated)
 	bool bIsAiming = false;

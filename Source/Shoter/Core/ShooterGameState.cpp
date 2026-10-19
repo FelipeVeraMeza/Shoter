@@ -1,4 +1,5 @@
 #include "Core/ShooterGameState.h"
+#include "Weapons/WeaponBase.h"
 #include "Net/UnrealNetwork.h"
 
 void AShooterGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -10,6 +11,7 @@ void AShooterGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(AShooterGameState, ScoreAlpha);
 	DOREPLIFETIME(AShooterGameState, ScoreBravo);
 	DOREPLIFETIME(AShooterGameState, KillFeed);
+	DOREPLIFETIME(AShooterGameState, PrimaryWeaponOptions);
 }
 
 float AShooterGameState::GetTimeRemaining() const

@@ -9,8 +9,41 @@
 
 class UWeaponDataAsset;
 class USkeletalMeshComponent;
+class UStaticMeshComponent;
+class UPointLightComponent;
 class AShooterCharacter;
 class UPhysicalMaterial;
+
+/**
+ * Geometría del arma deducida de su malla, para colocarla en primera persona.
+ *
+ * Las mallas de la plantilla no traen un socket de mira ni un eje documentado:
+ * el eje largo de la caja es el cañón (orientado hacia el socket Muzzle) y el
+ * borde superior, la línea de mira. Todo en el espacio de la malla.
+ */
+struct SHOTER_API FWeaponViewFrame
+{
+	bool bValid = false;
+
+	/** Ejes de la malla: adelante (cañón), arriba y derecha. */
+	FVector Forward = FVector::ForwardVector;
+	FVector Up = FVector::UpVector;
+	FVector Right = FVector::RightVector;
+
+	/** Rotación que lleva la malla al marco de la vista (X adelante, Z arriba). */
+	FQuat MeshToView = FQuat::Identity;
+
+	/** Punto por el que se apunta: centro de la ventana del visor o línea de miras. */
+	FVector SightLocation = FVector::ZeroVector;
+
+	FVector MuzzleLocation = FVector::ZeroVector;
+
+	/** Ventana de expulsión de casquillos, a la derecha del cajón. */
+	FVector EjectLocation = FVector::ZeroVector;
+
+	/** Borde superior del arma sobre el que se monta el visor. */
+	FVector MountLocation = FVector::ZeroVector;
+};
 
 /**
  * Lo necesario para calcular el daño de un disparo, copiado del arma.
@@ -79,8 +112,9 @@ public:
 	/** Copia del modelo de daño actual, para las balas en vuelo. */
 	FShooterDamageModel MakeDamageSnapshot() const;
 
-	/** Solo servidor. Reproduce un impacto en todos los clientes. */
-	void BroadcastImpact(const FVector& Location, const FVector& Normal, const UPhysicalMaterial* SurfaceMaterial);
+	/** Solo servidor. Reproduce un impacto en todos los clientes. bFlesh: la bala dio en un cuerpo. */
+	void BroadcastImpact(const FVector& Location, const FVector& Normal, const UPhysicalMaterial* SurfaceMaterial,
+		bool bFlesh = false);
 
 	// --- Selector de fuego ---
 
@@ -99,8 +133,28 @@ public:
 	/** Segundos desde que el jugador comprobó el cargador (para el HUD realista). */
 	float GetTimeSinceAmmoCheck() const;
 
+	/** Malla que ven los demás, en la mano del cuerpo. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Arma")
 	TObjectPtr<USkeletalMeshComponent> WeaponMesh;
+
+	/**
+	 * Malla que ve el propio jugador, en la mano de sus brazos de primera
+	 * persona. Separada de la otra porque cada una cuelga de un esqueleto
+	 * distinto y se dibuja con el campo de visión de primera persona.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Arma")
+	TObjectPtr<USkeletalMeshComponent> FirstPersonMesh;
+
+	USkeletalMeshComponent* GetFirstPersonMesh() const { return FirstPersonMesh; }
+
+	/** Geometría para colocar el arma ante la cámara. */
+	const FWeaponViewFrame& GetViewFrame() const { return ViewFrame; }
+
+	/** Duración de la recarga que empieza ahora (táctica o en vacío). */
+	float GetCurrentReloadDuration() const;
+
+	/** Oculta la malla de primera persona y su visor (al mirar por un visor de aumentos). */
+	void SetFirstPersonHidden(bool bShouldHide);
 
 	/** Petición de disparo desde el jugador. Válida en cliente y servidor. */
 	void TryStartFire();
@@ -140,6 +194,58 @@ protected:
 private:
 	UPROPERTY()
 	TObjectPtr<AShooterCharacter> OwningCharacter;
+
+	// --- Visor holográfico (solo primera persona) ---
+	//
+	// Se construye con cajas: base, dos montantes y la capucha forman la
+	// ventana, y un plano con la retícula hace de cristal. Un cubo macizo
+	// taparía la vista al apuntar.
+
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> SightParts;
+
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> SightGlass;
+
+	// --- Fogonazo ---
+
+	/** Planos cruzados del fogonazo: los que ve el tirador y los que ven los demás. */
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> FirstPersonFlash;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> ThirdPersonFlash;
+
+	/** La luz del fogonazo ilumina el entorno para todos. */
+	UPROPERTY()
+	TObjectPtr<UPointLightComponent> FlashLight;
+
+	FWeaponViewFrame ViewFrame;
+
+	/** Piezas del visor en uso: las demás quedan ocultas. */
+	int32 ActiveSightParts = 0;
+	bool bSightGlassActive = false;
+	bool bFirstPersonHidden = false;
+
+	/** Segundos que le quedan visible al fogonazo. */
+	float FlashTimeRemaining = 0.f;
+
+	/** Disparos desde la última trazadora, contados en cada máquina. */
+	int32 ShotsSinceTracer = 0;
+
+	/** Deduce ViewFrame de la malla y coloca visor y fogonazo. */
+	void BuildViewFrame();
+	void LayoutSight();
+	void LayoutFlash(const TArray<TObjectPtr<UStaticMeshComponent>>& Planes, USkeletalMeshComponent* Parent);
+	void ShowMuzzleFlash();
+	void UpdateMuzzleFlash(float DeltaSeconds);
+
+	/** Trazadora y casquillo de un disparo en la dirección indicada. */
+	void SpawnShotCosmetics(const FVector& Direction);
+
+	/** El tirador local ve su arma de primera persona; los demás, la del cuerpo. */
+	bool IsViewedInFirstPerson() const;
+	USkeletalMeshComponent* GetVisibleMesh() const;
 
 	/** Balas en el arma: cargador más la de la recámara. */
 	UPROPERTY(Replicated)
@@ -196,8 +302,9 @@ private:
 	bool CanFire() const;
 	void FireOnce();
 	void ApplyRecoilToOwner();
-	void PlayLocalFireEffects();
-	void SpawnImpactEffect(const FVector& Location, const FVector& Normal, const UPhysicalMaterial* SurfaceMaterial) const;
+	void PlayLocalFireEffects(const FVector& Direction);
+	void SpawnImpactEffect(const FVector& Location, const FVector& Normal, const UPhysicalMaterial* SurfaceMaterial,
+		bool bFlesh) const;
 
 	/** Dirección corregida por la puesta a cero de las miras. */
 	FVector ApplyZeroing(const FVector& Direction) const;
@@ -213,12 +320,13 @@ private:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_Fire(const FVector_NetQuantize& TraceStart, const FVector_NetQuantizeNormal& ShotDirection);
 
+	/** Direction: hacia dónde salió la bala, para que los demás vean la trazadora. */
 	UFUNCTION(NetMulticast, Unreliable)
-	void Multicast_PlayFireEffects();
+	void Multicast_PlayFireEffects(const FVector_NetQuantizeNormal& Direction);
 
 	UFUNCTION(NetMulticast, Unreliable)
 	void Multicast_PlayImpactEffect(const FVector_NetQuantize& ImpactLocation,
-		const FVector_NetQuantizeNormal& ImpactNormal, const UPhysicalMaterial* SurfaceMaterial);
+		const FVector_NetQuantizeNormal& ImpactNormal, const UPhysicalMaterial* SurfaceMaterial, bool bFlesh);
 
 	UFUNCTION(Server, Reliable)
 	void Server_Reload();

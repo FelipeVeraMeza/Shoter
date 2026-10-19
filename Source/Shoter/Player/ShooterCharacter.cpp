@@ -20,6 +20,11 @@
 #include "Engine/GameInstance.h"
 #include "Net/UnrealNetwork.h"
 #include "Kismet/GameplayStatics.h"
+#include "Player/ShooterFirstPersonComponent.h"
+#include "Core/ShooterGameMode.h"
+#include "Core/ShooterPlayerState.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Animation/AnimInstance.h"
 
 AShooterCharacter::AShooterCharacter()
 {
@@ -52,12 +57,161 @@ AShooterCharacter::AShooterCharacter()
 	FirstPersonCamera->bUsePawnControlRotation = true;
 	FirstPersonCamera->SetFieldOfView(DefaultFOV);
 
+	// Granada de fragmentación por defecto: la clase C++ funciona sin arte
+	// propio, así que G sirve aunque el Blueprint no asigne otra.
+	GrenadeClass = AShooterGrenade::StaticClass();
+
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
 	Inventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("Inventory"));
 	LagCompensation = CreateDefaultSubobject<ULagCompensationComponent>(TEXT("LagCompensation"));
 
-	// La malla no se ve en primera persona pero sí para los demás jugadores.
+	// El cuerpo lo ven los demás y proyecta la sombra del propio jugador; él
+	// solo ve sus brazos.
 	GetMesh()->SetOwnerNoSee(true);
+	GetMesh()->SetFirstPersonPrimitiveType(EFirstPersonPrimitiveType::WorldSpaceRepresentation);
+
+	FirstPersonArms = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("FirstPersonArms"));
+	FirstPersonArms->SetupAttachment(FirstPersonCamera);
+	FirstPersonArms->SetOnlyOwnerSee(true);
+	FirstPersonArms->SetFirstPersonPrimitiveType(EFirstPersonPrimitiveType::FirstPerson);
+	FirstPersonArms->SetCastShadow(false);
+	FirstPersonArms->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	FirstPersonArms->SetGenerateOverlapEvents(false);
+	FirstPersonArms->bReceivesDecals = false;
+
+	// La pose se necesita aunque los brazos estén ocultos un instante: de
+	// ella sale dónde va el arma.
+	FirstPersonArms->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+
+	FirstPersonView = CreateDefaultSubobject<UShooterFirstPersonComponent>(TEXT("FirstPersonView"));
+}
+
+FRotator AShooterCharacter::GetAimRotation() const
+{
+	return Controller ? Controller->GetControlRotation() : GetBaseAimRotation();
+}
+
+void AShooterCharacter::SetWantsToAim(bool bWantsToAim)
+{
+	if (bWantsToAim == bIsAiming)
+	{
+		return;
+	}
+
+	if (bWantsToAim)
+	{
+		StartAiming();
+	}
+	else
+	{
+		StopAiming();
+	}
+}
+
+void AShooterCharacter::RequestBandage()
+{
+	StartBandage();
+}
+
+void AShooterCharacter::SyncFirstPersonArms()
+{
+	USkeletalMeshComponent* Body = GetMesh();
+	if (!Body || !FirstPersonArms)
+	{
+		return;
+	}
+
+	USkeletalMesh* BodyMesh = Body->GetSkeletalMeshAsset();
+	if (BodyMesh && FirstPersonArms->GetSkeletalMeshAsset() != BodyMesh)
+	{
+		FirstPersonArms->SetSkeletalMeshAsset(BodyMesh);
+	}
+
+	for (int32 Index = 0; Index < Body->GetNumMaterials(); ++Index)
+	{
+		FirstPersonArms->SetMaterial(Index, Body->GetMaterial(Index));
+	}
+
+	// Cabeza y piernas fuera: la cámara está dentro de la cabeza y las
+	// piernas asomarían al mirar abajo con el cuerpo colocado por el arma.
+	for (const TCHAR* Bone : { TEXT("neck_01"), TEXT("thigh_l"), TEXT("thigh_r") })
+	{
+		if (FirstPersonArms->GetBoneIndex(Bone) != INDEX_NONE)
+		{
+			FirstPersonArms->HideBoneByName(Bone, PBO_None);
+		}
+	}
+}
+
+void AShooterCharacter::UpdateTeamAppearance()
+{
+	const AShooterPlayerState* ShooterState = GetPlayerState<AShooterPlayerState>();
+	if (!ShooterState)
+	{
+		return;
+	}
+
+	const EShooterTeam Team = ShooterState->GetTeam();
+	if (bTeamAppearanceApplied && Team == AppliedTeam)
+	{
+		return;
+	}
+
+	AppliedTeam = Team;
+	bTeamAppearanceApplied = true;
+
+	USkeletalMeshComponent* Body = GetMesh();
+	if (!Body)
+	{
+		return;
+	}
+
+	USkeletalMesh* TeamMesh = Team == EShooterTeam::Alpha ? AlphaTeamMesh.Get()
+		: (Team == EShooterTeam::Bravo ? BravoTeamMesh.Get() : nullptr);
+	if (TeamMesh && Body->GetSkeletalMeshAsset() != TeamMesh)
+	{
+		Body->SetSkeletalMeshAsset(TeamMesh);
+	}
+
+	if (Team != EShooterTeam::None)
+	{
+		const FLinearColor Tint = Team == EShooterTeam::Alpha ? AlphaTeamTint : BravoTeamTint;
+		for (int32 Index = 0; Index < Body->GetNumMaterials(); ++Index)
+		{
+			if (UMaterialInstanceDynamic* Material = Body->CreateDynamicMaterialInstance(Index))
+			{
+				Material->SetVectorParameterValue(TeamTintParameter, Tint);
+			}
+		}
+	}
+
+	SyncFirstPersonArms();
+}
+
+void AShooterCharacter::HandleWeaponChanged(AWeaponBase* NewWeapon)
+{
+	const UWeaponDataAsset* Data = NewWeapon ? NewWeapon->WeaponData.Get() : nullptr;
+	USkeletalMeshComponent* Body = GetMesh();
+	if (!Data || !Body)
+	{
+		return;
+	}
+
+	UClass* AnimClass = Data->ThirdPersonAnimClass.Get();
+	if (!AnimClass)
+	{
+		// Animation Blueprints de la plantilla: solo dependen de Character,
+		// así que funcionan con este personaje sin cambios.
+		AnimClass = LoadClass<UAnimInstance>(nullptr, Data->HoldType == EWeaponHoldType::Pistol
+			? TEXT("/Game/Variant_Shooter/Anims/ABP_TP_Pistol.ABP_TP_Pistol_C")
+			: TEXT("/Game/Variant_Shooter/Anims/ABP_TP_Rifle.ABP_TP_Rifle_C"),
+			nullptr, LOAD_NoWarn | LOAD_Quiet);
+	}
+
+	if (AnimClass && Body->GetAnimClass() != AnimClass)
+	{
+		Body->SetAnimInstanceClass(AnimClass);
+	}
 }
 
 void AShooterCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -86,6 +240,18 @@ void AShooterCharacter::BeginPlay()
 		DefaultCameraLocation = FirstPersonCamera->GetRelativeLocation();
 	}
 
+	if (FirstPersonView)
+	{
+		FirstPersonView->SetupView(FirstPersonArms, FirstPersonCamera);
+	}
+	SyncFirstPersonArms();
+
+	if (Inventory)
+	{
+		Inventory->OnWeaponChanged.AddDynamic(this, &AShooterCharacter::HandleWeaponChanged);
+		HandleWeaponChanged(Inventory->GetCurrentWeapon());
+	}
+
 	Stamina = MaxStamina;
 	BreathRemaining = MaxBreathHold;
 
@@ -110,6 +276,7 @@ void AShooterCharacter::Tick(float DeltaSeconds)
 	UpdateSlide(DeltaSeconds);
 	UpdateStamina(DeltaSeconds);
 	UpdateLean(DeltaSeconds);
+	UpdateTeamAppearance();
 
 	// Barato y evita perseguir cada causa por separado: apuntar, correr y
 	// las heridas de pierna cambian la velocidad desde sitios distintos.
@@ -1080,6 +1247,14 @@ void AShooterCharacter::HandleDeath(AActor* Victim, AController* Killer)
 	{
 		ShooterPC->OnCharacterDied(Killer);
 	}
+	else if (AController* BotController = GetController())
+	{
+		// Los bots también cuentan: sin esto no daban puntos ni reaparecían.
+		if (AShooterGameMode* GameMode = GetWorld()->GetAuthGameMode<AShooterGameMode>())
+		{
+			GameMode->OnBotKilled(BotController, Killer);
+		}
+	}
 }
 
 void AShooterCharacter::HandleHealthChanged(float NewHealth, float Delta, AController* InstigatedBy)
@@ -1108,7 +1283,13 @@ void AShooterCharacter::Multicast_PlayDeath_Implementation()
 
 	if (USkeletalMeshComponent* CharacterMesh = GetMesh())
 	{
+		CharacterMesh->SetCollisionProfileName(TEXT("Ragdoll"));
 		CharacterMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 		CharacterMesh->SetSimulatePhysics(true);
+	}
+
+	if (FirstPersonArms)
+	{
+		FirstPersonArms->SetHiddenInGame(true);
 	}
 }
